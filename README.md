@@ -9,11 +9,10 @@
 This repo holds the software the users touch. The backend, computer-vision edge service, and infrastructure live in separate repos. These four apps talk to the backend through one shared contract: [`contracts/openapi.yaml`](./contracts/openapi.yaml).
 
 | App | Path | What it does | Stack |
-|||||
-| 📱 Mobile | `apps/mobile` | Visitors book & pay for parking, get a QR | Flutter (Android + iOS) |
-| 🌐 Web | `apps/web` | Public booking site (same flow, browser) | React + TypeScript |
-| 🛂 Tablet | `apps/tablet` | Gate staff scan & validate QR codes (offline-capable) | React PWA |
-| 📊 Dashboard | `apps/dashboard` | Management: live occupancy, revenue, reports | React + TypeScript |
+|  Mobile | `apps/mobile` | Visitors book & pay for parking, get a QR | Flutter (Android + iOS) |
+|  Web | `apps/web` | Public booking site (same flow, browser) | React + TypeScript |
+|  Tablet | `apps/tablet` | Gate staff scan & validate QR codes (offline-capable) | React PWA |
+|  Dashboard | `apps/dashboard` | Management: live occupancy, revenue, reports | React + TypeScript |
 
 
 
@@ -73,15 +72,7 @@ This is why Mobile (Dart) and the React apps stay in sync despite being differen
 
 ## Common Commands
 
-| Command | Does |
-|||
-| `./scripts/setup.sh` | Bootstrap a fresh machine |
-| `make dev-web` / `dev-tablet` / `dev-dashboard` / `dev-mobile` | Run one app |
-| `make gen-api` | Regenerate API clients after a contract change |
-| `make test` | Run every test suite |
-| `make lint` | Lint + format-check everything |
-| `pnpm --filter web test` | Run tests for one React app only |
-
+| Command | Does 
 
 
 ## Tech Stack
