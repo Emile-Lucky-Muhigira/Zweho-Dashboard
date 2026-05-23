@@ -13,6 +13,7 @@ const ALL_VIEWS = [
   { id: 'cameras',    label: 'Cameras',      path: '/cameras',    icon: 'Camera' },
   { id: 'staff',      label: 'Staff',        path: '/staff',      icon: 'User' },
   { id: 'scanner',    label: 'Gate Scan',    path: '/scanner',    icon: 'QrCode' },
+  { id: 'scan-history', label: 'Scan History', path: '/scan-history', icon: 'Receipt' },
   { id: 'annotation', label: 'Annotate',     path: '/annotation', icon: 'Map' },
   { id: 'edge-devices', label: 'Edge Devices', path: '/edge-devices', icon: 'Server' },
   { id: 'api-docs',     label: 'API Docs',     path: '/api-docs',     icon: 'Code' },

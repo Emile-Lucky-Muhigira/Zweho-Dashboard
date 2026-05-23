@@ -9,6 +9,7 @@ import BookingsView from './views/BookingsView'
 import RevenueView from './views/RevenueView'
 import AnalyticsView from './views/AnalyticsView'
 import ScannerView from './views/ScannerView'
+import ScanHistoryView from './views/ScanHistoryView'
 import AnnotationView from './views/AnnotationView'
 import EventsView from './views/EventsView'
 import CamerasView from './views/CamerasView'
@@ -69,8 +70,8 @@ export default function App() {
         <Route path="/staff" element={
           <ProtectedRoute viewId="staff"><StaffView /></ProtectedRoute>
         } />
-        <Route path="/scanner" element={
-          <ProtectedRoute viewId="scanner"><ScannerView /></ProtectedRoute>
+        <Route path="/scan-history" element={
+          <ProtectedRoute viewId="scan-history"><ScanHistoryView /></ProtectedRoute>
         } />
         <Route path="/annotation" element={
           <ProtectedRoute viewId="annotation"><AnnotationView /></ProtectedRoute>
