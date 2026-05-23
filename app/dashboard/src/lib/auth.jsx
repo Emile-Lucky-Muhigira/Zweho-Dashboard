@@ -26,7 +26,7 @@ const DEMO_ACCOUNTS = [
 ]
 
 export const ROLE_PERMISSIONS = {
-  admin: ['occupancy', 'bookings', 'revenue', 'analytics', 'events', 'cameras', 'staff', 'scanner', 'annotation', 'edge-devices', 'api-docs', 'settings'],
+  admin: ['occupancy', 'zones', 'bookings', 'revenue', 'analytics', 'events', 'cameras', 'staff', 'scanner', 'annotation', 'edge-devices', 'api-docs', 'settings'],
   staff: ['scanner'],
   'stadium-rep': ['revenue', 'analytics', 'events'],
 }

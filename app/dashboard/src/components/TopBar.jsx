@@ -5,7 +5,7 @@ import { Icons } from './Icons'
 
 const ALL_VIEWS = [
   { id: 'occupancy',  label: 'Overview',     path: '/',           icon: 'Home' },
-  { id: 'occupancy',  label: 'Zones',        path: '/zones',      icon: 'Grid', note: 'CV' },
+  { id: 'zones',      label: 'Zones',        path: '/zones',      icon: 'Grid' },
   { id: 'bookings',   label: 'Bookings',     path: '/bookings',   icon: 'Receipt' },
   { id: 'revenue',    label: 'Revenue',      path: '/revenue',    icon: 'Chart' },
   { id: 'analytics',  label: 'Analytics',    path: '/analytics',  icon: 'Gauge' },

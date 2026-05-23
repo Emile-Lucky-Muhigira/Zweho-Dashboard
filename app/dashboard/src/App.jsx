@@ -4,6 +4,7 @@ import Shell from './components/TopBar'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginView from './views/LoginView'
 import LiveOccupancyView from './views/LiveOccupancyView'
+import ZonesView from './views/ZonesView'
 import BookingsView from './views/BookingsView'
 import RevenueView from './views/RevenueView'
 import AnalyticsView from './views/AnalyticsView'
@@ -48,7 +49,7 @@ export default function App() {
           <ProtectedRoute viewId="occupancy"><LiveOccupancyView /></ProtectedRoute>
         } />
         <Route path="/zones" element={
-          <ProtectedRoute viewId="occupancy"><LiveOccupancyView /></ProtectedRoute>
+          <ProtectedRoute viewId="zones"><ZonesView /></ProtectedRoute>
         } />
         <Route path="/bookings" element={
           <ProtectedRoute viewId="bookings"><BookingsView /></ProtectedRoute>
