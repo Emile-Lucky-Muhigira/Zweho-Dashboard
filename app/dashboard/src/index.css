@@ -1,0 +1,268 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── LIGHT THEME · "Kigali Cream" (default) ─────────────────── */
+:root {
+  --zp-bg:        #F4F0E8;
+  --zp-surface:   #FFFFFF;
+  --zp-surface-2: #FAF7F0;
+  --zp-ink:       #14223E;
+  --zp-ink-2:     #4A5366;
+  --zp-ink-3:     #8C8676;
+  --zp-line:      #E5DFD0;
+  --zp-line-2:    #EFEAD9;
+
+  --zp-primary:       #163A6E;
+  --zp-primary-ink:   #0A1F3F;
+  --zp-primary-soft:  #E2E8F4;
+  --zp-on-primary:    #FFFFFF;
+  --zp-accent:        #E4B228;
+  --zp-accent-soft:   #FAEBC7;
+  --zp-accent-ink:    #6B4F0E;
+
+  --zp-free:      #1F8A5B;
+  --zp-free-soft: #DCEEE3;
+  --zp-busy:      #E8941A;
+  --zp-busy-soft: #FAE7C9;
+  --zp-full:      #C44A3E;
+  --zp-full-soft: #F3D9D2;
+  --zp-info:      #2563A8;
+  --zp-info-soft: #DCE7F1;
+
+  --zp-font-ui:      'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --zp-font-display: 'Instrument Serif', 'Hanken Grotesk', serif;
+  --zp-font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --zp-shadow-1: 0 1px 2px rgba(20,34,62,.04), 0 1px 1px rgba(20,34,62,.03);
+  --zp-shadow-2: 0 2px 6px rgba(20,34,62,.05), 0 6px 14px rgba(20,34,62,.06);
+  --zp-shadow-3: 0 6px 18px rgba(20,34,62,.08), 0 18px 40px rgba(20,34,62,.08);
+}
+
+/* ─── DARK THEME · activates when <html data-theme="dark"> ───── */
+[data-theme='dark'] {
+  --zp-bg:        #0E1322;
+  --zp-surface:   #161C2E;
+  --zp-surface-2: #1D2438;
+  --zp-ink:       #F2EEE2;
+  --zp-ink-2:     #B6BACA;
+  --zp-ink-3:     #7C8094;
+  --zp-line:      #2A3146;
+  --zp-line-2:    #232A3F;
+
+  --zp-primary:       #5C8FE6;
+  --zp-primary-ink:   #DCE6FA;
+  --zp-primary-soft:  #1B2A4A;
+  --zp-on-primary:    #0E1322;
+  --zp-accent:        #F2C447;
+  --zp-accent-soft:   #3A2E12;
+  --zp-accent-ink:    #F8DD8A;
+
+  --zp-free:      #4FB58A;
+  --zp-free-soft: #14302A;
+  --zp-busy:      #F2B14F;
+  --zp-busy-soft: #3A2A10;
+  --zp-full:      #E07566;
+  --zp-full-soft: #3B1C1A;
+  --zp-info:      #6FA0DA;
+  --zp-info-soft: #1A2738;
+
+  --zp-shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --zp-shadow-2: 0 2px 6px rgba(0,0,0,.4), 0 6px 14px rgba(0,0,0,.3);
+  --zp-shadow-3: 0 6px 18px rgba(0,0,0,.5), 0 18px 40px rgba(0,0,0,.45);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--zp-bg);
+  color: var(--zp-ink);
+  font-family: var(--zp-font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   CRITICAL: cascade ink color so nothing inherits "white"
+   from prior dark-theme component code. This guarantees text
+   is always readable on whatever background.
+   ============================================================ */
+#root, body, main, section, article, aside, header, footer,
+div, p, span, label, h1, h2, h3, h4, h5, h6, li, td, th, dt, dd {
+  color: var(--zp-ink);
+}
+
+p, span, label, li, td, th, dt, dd {
+  color: inherit;
+}
+
+input, textarea, select {
+  color: var(--zp-ink);
+  background: var(--zp-surface);
+  border-color: var(--zp-line);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--zp-ink-3);
+  opacity: 1;
+}
+
+button {
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+a { color: var(--zp-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ============================================================
+   Override OLD dark-theme Tailwind classes still scattered
+   in legacy view code so they map to the new theme variables.
+   ============================================================ */
+.text-zinc-50, .text-zinc-100, .text-zinc-200 {
+  color: var(--zp-ink) !important;
+}
+
+.text-zinc-300, .text-zinc-400 {
+  color: var(--zp-ink-2) !important;
+}
+
+.text-zinc-500, .text-zinc-600 {
+  color: var(--zp-ink-3) !important;
+}
+
+.bg-zinc-700, .bg-zinc-800, .bg-zinc-900 {
+  background-color: var(--zp-surface-2) !important;
+}
+
+.text-orange-400, .text-orange-500 {
+  color: var(--zp-busy) !important;
+}
+
+.text-green-400, .text-green-500 {
+  color: var(--zp-free) !important;
+}
+
+.text-red-400, .text-red-500 {
+  color: var(--zp-full) !important;
+}
+
+.text-blue-400, .text-blue-500 {
+  color: var(--zp-info) !important;
+}
+
+.text-amber-400, .text-amber-500 {
+  color: var(--zp-accent) !important;
+}
+
+/* fonts */
+.font-display { font-family: var(--zp-font-display); }
+.font-mono    { font-family: var(--zp-font-mono); }
+.font-ui      { font-family: var(--zp-font-ui); }
+
+/* Eyebrow label — uppercase mono spaced */
+.zp-eyebrow {
+  font-family: var(--zp-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--zp-ink-3);
+  font-weight: 500;
+}
+
+/* Card surface */
+.zp-card {
+  background: var(--zp-surface);
+  border: 1px solid var(--zp-line);
+  border-radius: 12px;
+  box-shadow: var(--zp-shadow-1);
+  color: var(--zp-ink);
+}
+
+/* Map / camera-feed surface — stays dark in light mode */
+.zp-map-surface {
+  background: #1A2440;
+  color: rgba(255,255,255,0.85);
+}
+[data-theme='dark'] .zp-map-surface {
+  background: var(--zp-surface-2);
+}
+
+/* Pill badges */
+.zp-badge {
+  display: inline-flex; align-items: center;
+  font-family: var(--zp-font-mono);
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 999px;
+}
+.zp-badge--free { background: var(--zp-free-soft); color: var(--zp-free); }
+.zp-badge--busy { background: var(--zp-busy-soft); color: var(--zp-busy); }
+.zp-badge--full { background: var(--zp-full-soft); color: var(--zp-full); }
+.zp-badge--info { background: var(--zp-info-soft); color: var(--zp-info); }
+.zp-badge--accent { background: var(--zp-accent-soft); color: var(--zp-accent-ink); }
+
+/* Progress bar */
+.zp-bar {
+  height: 6px; background: var(--zp-line-2); border-radius: 999px; overflow: hidden;
+}
+.zp-bar > i {
+  display: block; height: 100%; border-radius: 999px;
+  transition: width 300ms cubic-bezier(.22,.61,.36,1);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--zp-bg); }
+::-webkit-scrollbar-thumb { background: var(--zp-line); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--zp-ink-3); }
+
+/* Animations */
+@keyframes zp-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.25); }
+}
+.zp-pulse-dot { animation: zp-pulse-dot 1.6s ease-in-out infinite; }
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadein 0.3s ease-out; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.blink { animation: blink 1.4s infinite; }
+
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--zp-primary);
+  outline-offset: 2px;
+}
+
+/* Recharts styling */
+.recharts-text {
+  font-family: var(--zp-font-mono) !important;
+  font-size: 10px !important;
+  fill: var(--zp-ink-3) !important;
+}
+.recharts-default-tooltip {
+  background: var(--zp-surface) !important;
+  border: 1px solid var(--zp-line) !important;
+  border-radius: 8px !important;
+  font-family: var(--zp-font-mono) !important;
+  font-size: 11px !important;
+  box-shadow: var(--zp-shadow-2);
+  color: var(--zp-ink) !important;
+}

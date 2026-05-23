@@ -1,0 +1,36 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import App from './App.jsx'
+import { AuthProvider } from './lib/auth'
+import { ToastProvider } from './lib/toast'
+import ErrorBoundary from './components/ErrorBoundary'
+import './index.css'
+document.documentElement.setAttribute('data-theme', localStorage.getItem('zweho_theme') === 'dark' ? 'dark' : '')
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+})
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  </React.StrictMode>,
+)
