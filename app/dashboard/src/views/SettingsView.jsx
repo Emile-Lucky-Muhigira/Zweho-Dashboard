@@ -2,8 +2,10 @@ import React, { useState } from 'react'
 import { Panel, Pill, Eyebrow, DataRow } from '../components/ui'
 import { Icons } from '../components/Icons'
 import { ZONES } from '../lib/constants'
+import { useDemoMode } from '../lib/demoMode'
 
 const SECTIONS = [
+  { id: 'demo',           label: 'Demo Mode',            icon: 'Refresh' },
   { id: 'organisation',   label: 'Organisation',         icon: 'Stadium' },
   { id: 'pricing',        label: 'Zone Pricing',         icon: 'Chart' },
   { id: 'rules',          label: 'Business Rules',       icon: 'Settings' },
@@ -15,7 +17,7 @@ const SECTIONS = [
 ]
 
 export default function SettingsView() {
-  const [section, setSection] = useState('pricing')
+  const [section, setSection] = useState('demo')
 
   return (
     <div className="fade-in">
@@ -48,6 +50,7 @@ export default function SettingsView() {
 
         {/* Content */}
         <div className="md:col-span-9 lg:col-span-9">
+          {section === 'demo' && <DemoModeSection />}
           {section === 'organisation' && <OrganisationSection />}
           {section === 'pricing' && <PricingSection />}
           {section === 'rules' && <RulesSection />}
@@ -424,6 +427,76 @@ function BillingSection() {
           <div className="pt-3" style={{ borderTop: '1px solid var(--zp-line)' }}>
             <BillRow item="Total hardware" cost="1,650" unit="USD" bold />
           </div>
+        </div>
+      </Panel>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Demo Mode
+   ────────────────────────────────────────────────────────────── */
+function DemoModeSection() {
+  const { demoMode, toggle } = useDemoMode()
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader
+        title="Demo Mode"
+        desc="Controls whether the dashboard shows sample data or behaves as the real production system."
+      />
+
+      <Panel title="Sample data">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-semibold" style={{ color: 'var(--zp-ink)' }}>
+              {demoMode ? 'Demo data is ON' : 'Demo data is OFF'}
+            </div>
+            <div className="text-[12px] mt-1" style={{ color: 'var(--zp-ink-2)' }}>
+              {demoMode
+                ? 'The dashboard is filled with sample bookings, occupancy, and revenue for presentations. This data is not real.'
+                : 'The dashboard behaves as real production: it shows live data from the backend, or empty states when the backend is not connected.'}
+            </div>
+          </div>
+          <button
+            onClick={toggle}
+            className="relative w-12 h-7 rounded-full transition-colors flex-shrink-0"
+            style={{ background: demoMode ? 'var(--zp-primary)' : 'var(--zp-line)' }}
+          >
+            <span
+              className="absolute top-1 w-5 h-5 rounded-full transition-all"
+              style={{
+                background: '#fff',
+                left: demoMode ? 'calc(100% - 24px)' : '4px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+              }}
+            ></span>
+          </button>
+        </div>
+      </Panel>
+
+      <Panel title="When to use which">
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 rounded-md" style={{ background: 'var(--zp-primary-soft)' }}>
+            <span className="font-bold flex-shrink-0" style={{ color: 'var(--zp-primary)' }}>ON</span>
+            <div className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
+              <strong style={{ color: 'var(--zp-ink)' }}>Presentations & demos.</strong> Turn this on before showing the dashboard to the team, mentors, or in a pitch. Every page looks populated and alive.
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-md" style={{ background: 'var(--zp-surface-2)' }}>
+            <span className="font-bold flex-shrink-0" style={{ color: 'var(--zp-ink-3)' }}>OFF</span>
+            <div className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
+              <strong style={{ color: 'var(--zp-ink)' }}>Real operation.</strong> Leave this off for production. The dashboard shows real data from Bruno's backend — or honest empty states until it is connected.
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="Backend status">
+        <div className="space-y-1.5">
+          <DataRow label="API base URL" value={import.meta.env.VITE_API_BASE || 'http://localhost:8000'} mono small />
+          <DataRow label="Connection" value={demoMode ? 'Bypassed (demo data)' : 'Live calls — empty if unreachable'} small />
+          <DataRow label="Bookings source" value={demoMode ? 'Sample generator' : 'GET /bookings'} mono small />
         </div>
       </Panel>
     </div>
