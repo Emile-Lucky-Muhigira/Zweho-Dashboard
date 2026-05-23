@@ -70,6 +70,9 @@ export default function App() {
         <Route path="/staff" element={
           <ProtectedRoute viewId="staff"><StaffView /></ProtectedRoute>
         } />
+        <Route path="/scanner" element={
+          <ProtectedRoute viewId="scanner"><ScannerView /></ProtectedRoute>
+        } />
         <Route path="/scan-history" element={
           <ProtectedRoute viewId="scan-history"><ScanHistoryView /></ProtectedRoute>
         } />
