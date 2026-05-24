@@ -1,214 +1,317 @@
-import React, { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, DEMO_HINTS } from '../lib/auth'
+import React, { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth, DEV_HINTS } from '../lib/auth'
 
 export default function LoginView() {
-  const [phone, setPhone] = useState('')
+  const navigate = useNavigate()
+  const { loginStep1, verifyOtp, resendOtp, devLogin } = useAuth()
+
+  const [step, setStep] = useState('credentials') // 'credentials' | 'otp'
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [busy, setBusy] = useState(false)
+  const [showDev, setShowDev] = useState(false)
 
-  const from = location.state?.from?.pathname || '/'
+  // OTP state
+  const [otpLength, setOtpLength] = useState(6)
+  const [secondsLeft, setSecondsLeft] = useState(0)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleCredentials = async (e) => {
+    e?.preventDefault()
     setError('')
-    setLoading(true)
+    if (!email.trim() || !password) {
+      setError('Enter your email and password.')
+      return
+    }
+    setBusy(true)
     try {
-      const user = await login({ phone, password })
-      if (user.role === 'staff') navigate('/scanner', { replace: true })
-      else if (user.role === 'stadium-rep') navigate('/revenue', { replace: true })
-      else navigate(from === '/login' ? '/' : from, { replace: true })
+      const res = await loginStep1({ email: email.trim(), password })
+      setOtpLength(res.otpLength || 6)
+      setSecondsLeft(res.expiresIn || 300)
+      setStep('otp')
     } catch (err) {
-      setError(err.message || 'Login failed')
-      setLoading(false)
+      setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
-  const fillDemo = (account) => {
-    setPhone(account.phone)
-    setPassword(account.password)
+  const handleVerify = async (code) => {
     setError('')
+    setBusy(true)
+    try {
+      const result = await verifyOtp({ email: email.trim(), code })
+      if (result.mustChangePassword) {
+        // Freshly invited staff using their default password —
+        // send them to create a new one before entering the app.
+        navigate('/create-password')
+      } else {
+        navigate('/')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const quickLogin = async (account) => {
+  const handleResend = async () => {
     setError('')
-    setLoading(true)
     try {
-      const user = await login({ phone: account.phone, password: account.password })
-      if (user.role === 'staff') navigate('/scanner', { replace: true })
-      else if (user.role === 'stadium-rep') navigate('/revenue', { replace: true })
-      else navigate(from === '/login' ? '/' : from, { replace: true })
+      await resendOtp({ email: email.trim() })
+      setSecondsLeft(300)
     } catch (err) {
-      setError(err.message || 'Login failed')
-      setLoading(false)
+      setError(err.message)
+    }
+  }
+
+  const handleDevLogin = (devEmail, devPassword) => {
+    setError('')
+    try {
+      devLogin({ email: devEmail, password: devPassword })
+      navigate('/')
+    } catch (err) {
+      setError(err.message)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative px-4 py-8">
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse 800px 600px at 50% 30%, rgba(255, 120, 73, 0.12), transparent 70%)'
-      }} />
-
-      <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* LEFT: Login form */}
-        <div>
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--accent)] rounded-sm accent-glow mb-5">
-              <svg width="32" height="32" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="2" width="5" height="5" fill="#0a0c10"/>
-                <rect x="9" y="2" width="5" height="5" fill="#0a0c10"/>
-                <rect x="2" y="9" width="5" height="5" fill="#0a0c10"/>
-                <rect x="9" y="9" width="5" height="5" fill="#0a0c10"/>
-              </svg>
-            </div>
-            <h1 className="font-display text-4xl font-semibold tracking-tight text-zinc-50 leading-none">
-              Zweho<span className="text-[var(--accent)]">.</span>Park
-            </h1>
-            <p className="text-[11px] font-mono uppercase tracking-[0.28em] text-[var(--text-muted)] mt-3">
-              Smartpark · Amahoro · Kigali
-            </p>
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'var(--zp-bg)' }}>
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-2.5 mb-8">
+          <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: 'var(--zp-primary)' }}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+              <rect x="2" y="2" width="5" height="5" fill="#F4F0E8" />
+              <rect x="9" y="2" width="5" height="5" fill="#F4F0E8" />
+              <rect x="2" y="9" width="5" height="5" fill="#F4F0E8" />
+              <rect x="9" y="9" width="5" height="5" fill="#F4F0E8" />
+            </svg>
           </div>
-
-          <div className="panel-surface bg-[var(--bg-panel)]/95 backdrop-blur-sm border border-[var(--border)] rounded p-7 shadow-2xl shadow-black/40">
-            <div className="mb-6">
-              <h2 className="font-display text-xl font-medium text-zinc-50">Operations Console</h2>
-              <p className="text-[12px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)] mt-1">Sign in to continue</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2 font-medium">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+250 7XX XXX XXX"
-                  required
-                  autoComplete="tel"
-                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border)] rounded-sm px-4 py-3 text-[14px] font-mono text-zinc-100 placeholder-[var(--text-muted)] focus:border-[var(--accent)] outline-none transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mb-2 font-medium">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border)] rounded-sm px-4 py-3 text-[14px] font-mono text-zinc-100 placeholder-[var(--text-muted)] focus:border-[var(--accent)] outline-none transition-colors"
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-sm px-3 py-2 text-[12px] text-red-400 font-mono">
-                  ⚠ {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[var(--accent)] hover:opacity-90 disabled:opacity-50 text-zinc-900 font-semibold py-3 rounded-sm transition-opacity text-[13px] font-mono uppercase tracking-[0.18em] mt-2"
-              >
-                {loading ? 'Signing in...' : 'Enter Console →'}
-              </button>
-            </form>
-          </div>
-
-          <div className="text-center mt-6 text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--text-muted)]">
-            Zweho Park v1.0 · CMU Africa · Confidential
+          <div className="font-display text-xl" style={{ color: 'var(--zp-ink)' }}>
+            Zweho<span style={{ color: 'var(--zp-accent)' }}>.</span>Park
           </div>
         </div>
 
-        {/* RIGHT: Demo accounts panel */}
-        <div className="lg:mt-[88px]">
-          <div className="panel-surface bg-[var(--bg-panel)]/95 backdrop-blur-sm border border-[var(--border)] rounded shadow-2xl shadow-black/40">
-            <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
-              <div>
-                <h3 className="font-display text-[15px] font-medium text-zinc-50">Quick Login</h3>
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[var(--text-muted)] mt-0.5">
-                  Dev mode · click to sign in
-                </p>
-              </div>
-              <span className="text-[10px] font-mono uppercase tracking-[0.18em] px-2 py-1 rounded-sm border bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
-                Dev only
-              </span>
-            </div>
-
-            <div className="p-3 space-y-2">
-              {DEMO_HINTS.map((acc, i) => {
-                const roleStyles = {
-                  admin: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-                  staff: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-                  'stadium-rep': 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-                }
-                const initials = acc.name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
-                const access = {
-                  admin: 'All 5 views',
-                  staff: 'QR Scanner only',
-                  'stadium-rep': 'Revenue + Analytics',
-                }[acc.role]
-                return (
-                  <div key={i} className="border border-[var(--border)] hover:border-[var(--border-strong)] rounded-sm p-3 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
-                        acc.role === 'admin' ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-900' :
-                        acc.role === 'staff' ? 'bg-gradient-to-br from-blue-400 to-blue-600 text-zinc-900' :
-                        'bg-gradient-to-br from-amber-400 to-amber-600 text-zinc-900'
-                      }`}>
-                        {initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[13px] text-zinc-100 font-medium">{acc.name}</span>
-                          <span className={`text-[9px] font-mono uppercase tracking-[0.15em] px-1.5 py-0.5 rounded-sm border font-medium ${roleStyles[acc.role]}`}>
-                            {acc.role}
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-mono text-[var(--text-muted)] mt-0.5">{acc.phone}</div>
-                        <div className="text-[10px] font-mono text-[var(--text-secondary)] mt-1">Access: {access}</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => fillDemo(acc)}
-                        className="flex-1 text-[10px] font-mono uppercase tracking-[0.15em] py-2 bg-[var(--bg-elevated)] hover:bg-zinc-700 border border-[var(--border)] rounded-sm font-medium text-zinc-200"
-                      >
-                        Fill form
-                      </button>
-                      <button
-                        onClick={() => quickLogin(acc)}
-                        disabled={loading}
-                        className="flex-1 text-[10px] font-mono uppercase tracking-[0.15em] py-2 bg-[var(--accent)] hover:opacity-90 disabled:opacity-50 text-zinc-900 rounded-sm font-semibold"
-                      >
-                        Sign in →
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="px-5 py-3 border-t border-[var(--border)]">
-              <p className="text-[10px] font-mono text-[var(--text-muted)] leading-relaxed">
-                ⚠ Remove this panel before production deployment. The real auth flow uses phone-based OTP via Bruno's <span className="text-zinc-300">/auth/login</span> endpoint.
+        {/* Card */}
+        <div className="zp-card p-6">
+          {step === 'credentials' && (
+            <>
+              <div className="zp-eyebrow">Dashboard access</div>
+              <h1 className="font-display text-2xl mt-1" style={{ color: 'var(--zp-ink)' }}>Sign in</h1>
+              <p className="text-[12px] mt-1.5" style={{ color: 'var(--zp-ink-2)' }}>
+                Enter the credentials sent to your email. A verification code will be sent to your phone.
               </p>
-            </div>
-          </div>
+
+              <form onSubmit={handleCredentials} className="mt-5 space-y-3">
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--zp-ink-3)' }}>Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    className="w-full mt-1 px-3 py-2.5 text-[13px] rounded-md outline-none"
+                    style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
+                  />
+                </div>
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--zp-ink-3)' }}>Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="w-full mt-1 px-3 py-2.5 text-[13px] rounded-md outline-none"
+                    style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
+                  />
+                </div>
+
+                {error && <ErrorNote text={error} />}
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full py-2.5 text-[12px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+                  style={{ background: 'var(--zp-primary)', color: '#fff', opacity: busy ? 0.6 : 1 }}
+                >
+                  {busy ? 'Checking…' : 'Continue'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'otp' && (
+            <OtpStep
+              email={email}
+              length={otpLength}
+              secondsLeft={secondsLeft}
+              setSecondsLeft={setSecondsLeft}
+              busy={busy}
+              error={error}
+              onVerify={handleVerify}
+              onResend={handleResend}
+              onBack={() => { setStep('credentials'); setError('') }}
+            />
+          )}
         </div>
+
+        {/* Developer access — TEMPORARY, remove before launch */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowDev(!showDev)}
+            className="w-full text-center font-mono text-[10px] uppercase tracking-[0.16em] py-2"
+            style={{ color: 'var(--zp-ink-3)' }}
+          >
+            {showDev ? '▴ Hide developer access' : '▾ Developer access'}
+          </button>
+
+          {showDev && (
+            <div className="zp-card p-4 mt-1">
+              <div className="zp-eyebrow">Developer access · temporary</div>
+              <p className="text-[11px] mt-1.5 mb-3" style={{ color: 'var(--zp-ink-2)' }}>
+                For team review before the authentication backend is live. Bypasses OTP. To be removed before launch.
+              </p>
+              <div className="space-y-1.5">
+                {DEV_HINTS.map(h => (
+                  <button
+                    key={h.email}
+                    onClick={() => handleDevLogin(h.email, h.password)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-left transition-colors"
+                    style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)' }}
+                  >
+                    <div>
+                      <div className="text-[12px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{h.name}</div>
+                      <div className="font-mono text-[10px]" style={{ color: 'var(--zp-ink-3)' }}>{h.email}</div>
+                    </div>
+                    <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--zp-primary-soft)', color: 'var(--zp-primary)' }}>
+                      {h.role}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="text-center font-mono text-[10px] mt-5" style={{ color: 'var(--zp-ink-3)' }}>
+          Zweho Park · SmartPark Amahoro · Kigali
+        </p>
       </div>
+    </div>
+  )
+}
+
+/* ── OTP step ──────────────────────────────────────────────── */
+function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, onVerify, onResend, onBack }) {
+  const [digits, setDigits] = useState(Array(length).fill(''))
+  const inputs = useRef([])
+
+  // Countdown
+  useEffect(() => {
+    if (secondsLeft <= 0) return
+    const id = setInterval(() => setSecondsLeft(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [secondsLeft, setSecondsLeft])
+
+  useEffect(() => { inputs.current[0]?.focus() }, [])
+
+  const setDigit = (i, val) => {
+    const clean = val.replace(/\D/g, '').slice(-1)
+    const next = [...digits]
+    next[i] = clean
+    setDigits(next)
+    if (clean && i < length - 1) inputs.current[i + 1]?.focus()
+    // Auto-submit when all filled
+    if (next.every(d => d !== '')) onVerify(next.join(''))
+  }
+
+  const onKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus()
+  }
+
+  const onPaste = (e) => {
+    const text = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, length)
+    if (!text) return
+    e.preventDefault()
+    const next = Array(length).fill('')
+    text.split('').forEach((d, i) => { next[i] = d })
+    setDigits(next)
+    if (next.every(d => d !== '')) onVerify(next.join(''))
+  }
+
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = String(secondsLeft % 60).padStart(2, '0')
+
+  return (
+    <>
+      <div className="zp-eyebrow">Two-step verification</div>
+      <h1 className="font-display text-2xl mt-1" style={{ color: 'var(--zp-ink)' }}>Enter the code</h1>
+      <p className="text-[12px] mt-1.5" style={{ color: 'var(--zp-ink-2)' }}>
+        We sent a {length}-digit code by SMS to the phone registered to <strong style={{ color: 'var(--zp-ink)' }}>{email}</strong>.
+      </p>
+
+      {/* OTP boxes */}
+      <div className="flex gap-2 mt-5" onPaste={onPaste}>
+        {digits.map((d, i) => (
+          <input
+            key={i}
+            ref={el => (inputs.current[i] = el)}
+            value={d}
+            onChange={e => setDigit(i, e.target.value)}
+            onKeyDown={e => onKeyDown(i, e)}
+            inputMode="numeric"
+            maxLength={1}
+            className="flex-1 aspect-square text-center font-mono text-xl font-bold rounded-md outline-none"
+            style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
+          />
+        ))}
+      </div>
+
+      {error && <div className="mt-3"><ErrorNote text={error} /></div>}
+
+      {/* Expiry + resend */}
+      <div className="flex items-center justify-between mt-4">
+        <span className="font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>
+          {secondsLeft > 0 ? `Code expires in ${mins}:${secs}` : 'Code expired'}
+        </span>
+        <button
+          onClick={onResend}
+          className="font-mono text-[11px] uppercase tracking-[0.12em] font-semibold"
+          style={{ color: 'var(--zp-primary)' }}
+        >
+          Resend code
+        </button>
+      </div>
+
+      {busy && (
+        <div className="mt-4 text-center font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>
+          Verifying…
+        </div>
+      )}
+
+      <button
+        onClick={onBack}
+        className="w-full mt-4 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+        style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
+      >
+        ← Back
+      </button>
+    </>
+  )
+}
+
+function ErrorNote({ text }) {
+  return (
+    <div
+      className="px-3 py-2 rounded-md text-[12px]"
+      style={{ background: 'var(--zp-full-soft)', color: 'var(--zp-full)' }}
+    >
+      {text}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import Shell from './components/TopBar'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginView from './views/LoginView'
+import CreatePasswordView from './views/CreatePasswordView'
 import LiveOccupancyView from './views/LiveOccupancyView'
 import ZonesView from './views/ZonesView'
 import BookingsView from './views/BookingsView'
@@ -30,6 +31,17 @@ export default function App() {
   }, [])
 
   const isLoginPage = location.pathname === '/login'
+  const isCreatePasswordPage = location.pathname === '/create-password'
+
+  // Create-password screen — first sign-in, no shell, shown
+  // even though the user isn't fully logged in yet.
+  if (isCreatePasswordPage) {
+    return (
+      <Routes>
+        <Route path="/create-password" element={<CreatePasswordView />} />
+      </Routes>
+    )
+  }
 
   // Login screen — no shell
   if (isLoginPage || !user) {
