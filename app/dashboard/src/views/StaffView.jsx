@@ -1,90 +1,53 @@
 import React, { useState } from 'react'
+import {
+  useStaff, ROLES, ROLE_ACCESS, initialsOf,
+} from '../lib/staffStore'
+import { useAuth } from '../lib/auth'
 import { Panel, MetricCard, Pill, Eyebrow } from '../components/ui'
 import { Icons } from '../components/Icons'
-
-const STAFF = [
-  {
-    id: 'usr_001', name: 'Nouba-Asra Goursam Tresor', initials: 'NT', email: 'ngoursam@andrew.cmu.edu',
-    phone: '+250 791 447 448', role: 'admin', title: 'Product / Operations Lead', team: 'leadership',
-    status: 'active', last_seen: '2 min ago', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_002', name: 'Emile Lucky Muhigira', initials: 'EM', email: 'emuhigir@andrew.cmu.edu',
-    phone: '+250 784 007 708', role: 'admin', title: 'Dashboard / Web Engineer', team: 'engineering',
-    status: 'active', last_seen: 'now', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_003', name: 'Bruno Payang', initials: 'BP', email: 'bpayang@andrew.cmu.edu',
-    phone: '+250 796 893 424', role: 'admin', title: 'Backend Engineer', team: 'engineering',
-    status: 'active', last_seen: '14 min ago', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_004', name: 'Hafiz Adjei', initials: 'HA', email: 'hadjei@andrew.cmu.edu',
-    phone: '+233 549 201 359', role: 'admin', title: 'CV / AI Engineer', team: 'engineering',
-    status: 'active', last_seen: '1 hour ago', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_005', name: 'Simeon Hatangimana', initials: 'SH', email: 'shatangi@andrew.cmu.edu',
-    phone: '+250 784 004 300', role: 'admin', title: 'DevOps / Hardware Lead', team: 'engineering',
-    status: 'active', last_seen: '6 min ago', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_006', name: 'Denys Ntwaritaganzwa', initials: 'DN', email: 'dntwarit@andrew.cmu.edu',
-    phone: '+250 788 945 193', role: 'admin', title: 'Mobile / Frontend Engineer', team: 'engineering',
-    status: 'active', last_seen: '30 min ago', joined: '2026-01-15', shifts_this_month: 0,
-  },
-  {
-    id: 'usr_010', name: 'Daniel Kayisire', initials: 'DK', email: 'dkayisire@zwehopark.rw',
-    phone: '+250 788 100 001', role: 'staff', title: 'Gate Operator · North', team: 'gate-ops',
-    status: 'active', last_seen: '12 min ago', joined: '2026-04-20', shifts_this_month: 8,
-  },
-  {
-    id: 'usr_011', name: 'Aimable Niyonzima', initials: 'AN', email: 'aniyonzima@zwehopark.rw',
-    phone: '+250 788 100 003', role: 'staff', title: 'Gate Operator · South', team: 'gate-ops',
-    status: 'active', last_seen: '3 hours ago', joined: '2026-04-22', shifts_this_month: 7,
-  },
-  {
-    id: 'usr_012', name: 'Marie Uwizeye', initials: 'MU', email: 'muwizeye@zwehopark.rw',
-    phone: '+250 788 100 004', role: 'staff', title: 'Gate Operator · East', team: 'gate-ops',
-    status: 'inactive', last_seen: '5 days ago', joined: '2026-04-25', shifts_this_month: 2,
-  },
-  {
-    id: 'usr_020', name: 'Joseph Habimana', initials: 'JH', email: 'joseph.h@amahoro-stadium.rw',
-    phone: '+250 788 100 002', role: 'stadium-rep', title: 'Stadium Liaison', team: 'external',
-    status: 'active', last_seen: '2 days ago', joined: '2026-03-15', shifts_this_month: 0,
-  },
-]
+import { useToast } from '../lib/toast'
 
 export default function StaffView() {
+  const { staff, inviteMember, updateMember, changeRole, suspendMember, reactivateMember, removeMember, activateInvite, resetPassword } = useStaff()
+  const { user } = useAuth()
+  const toast = useToast()
+  const isAdmin = user?.role === 'admin'
+
+  const [showInvite, setShowInvite] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState(null)
+  const [credModal, setCredModal] = useState(null) // { member, type, value }
 
-  const filtered = STAFF.filter(s => {
-    if (filter !== 'all' && s.role !== filter) return false
-    if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.email.toLowerCase().includes(search.toLowerCase())) return false
+  const filtered = staff.filter(m => {
+    if (filter !== 'all' && m.role !== filter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!m.name.toLowerCase().includes(q) && !m.email.toLowerCase().includes(q)) return false
+    }
     return true
   })
 
   const counts = {
-    admin: STAFF.filter(s => s.role === 'admin').length,
-    staff: STAFF.filter(s => s.role === 'staff').length,
-    'stadium-rep': STAFF.filter(s => s.role === 'stadium-rep').length,
-    active: STAFF.filter(s => s.status === 'active').length,
+    admin: staff.filter(m => m.role === 'admin').length,
+    staff: staff.filter(m => m.role === 'staff').length,
+    'stadium-rep': staff.filter(m => m.role === 'stadium-rep').length,
+    invited: staff.filter(m => m.status === 'invited').length,
   }
 
   return (
     <div className="space-y-5 fade-in">
+      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <MetricCard label="Total Staff" value={STAFF.length} tone="info" />
-        <MetricCard label="Admins" value={counts.admin} unit="full access" tone="busy" />
-        <MetricCard label="Gate Operators" value={counts.staff} unit="scanner only" tone="info" />
-        <MetricCard label="Currently Active" value={counts.active} delta="online today" tone="free" />
+        <MetricCard label="Total Members" value={staff.length} tone="info" />
+        <MetricCard label="Admins" value={counts.admin} tone="busy" />
+        <MetricCard label="Gate Operators" value={counts.staff} tone="info" />
+        <MetricCard label="Pending Invites" value={counts.invited} tone={counts.invited > 0 ? 'busy' : 'free'} />
       </div>
 
       <Panel
         title="Team Directory"
-        subtitle="Manage access · Role-based permissions"
+        subtitle="Members & access control"
         noPadding
         action={
           <div className="flex items-center gap-2">
@@ -96,26 +59,30 @@ export default function StaffView() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search by name or email…"
-                className="bg-transparent text-[13px] w-52 outline-none"
+                placeholder="Search name or email…"
+                className="bg-transparent text-[13px] w-48 outline-none"
                 style={{ color: 'var(--zp-ink)' }}
               />
             </div>
-            <button
-              className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-              style={{ background: 'var(--zp-primary)', color: '#fff' }}
-            >
-              <Icons.Plus size={13} /> Invite member
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => { setShowInvite(true); setEditingId(null) }}
+                className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+                style={{ background: 'var(--zp-primary)', color: '#fff' }}
+              >
+                <Icons.Plus size={13} /> Invite member
+              </button>
+            )}
           </div>
         }
       >
+        {/* Filter chips */}
         <div className="flex items-center gap-1 px-5 py-3 flex-wrap" style={{ borderBottom: '1px solid var(--zp-line)', background: 'var(--zp-surface-2)' }}>
           {[
-            { id: 'all', label: 'All', count: STAFF.length },
-            { id: 'admin', label: 'Admins', count: counts.admin },
-            { id: 'staff', label: 'Gate Staff', count: counts.staff },
-            { id: 'stadium-rep', label: 'Stadium Reps', count: counts['stadium-rep'] },
+            { id: 'all', label: 'All', n: staff.length },
+            { id: 'admin', label: 'Admins', n: counts.admin },
+            { id: 'staff', label: 'Gate Operators', n: counts.staff },
+            { id: 'stadium-rep', label: 'Stadium Reps', n: counts['stadium-rep'] },
           ].map(f => (
             <button
               key={f.id}
@@ -126,138 +93,458 @@ export default function StaffView() {
                 color: filter === f.id ? 'var(--zp-primary)' : 'var(--zp-ink-2)',
               }}
             >
-              {f.label}
-              <span className="ml-1.5 font-normal" style={{ opacity: 0.6 }}>{f.count}</span>
+              {f.label} <span className="font-normal" style={{ opacity: 0.6 }}>{f.n}</span>
             </button>
           ))}
         </div>
 
+        {/* Invite form */}
+        {showInvite && (
+          <MemberForm
+            mode="invite"
+            onSave={(data) => {
+              const m = inviteMember(data)
+              setShowInvite(false)
+              // Show the credential to share
+              if (m.inviteMethod === 'password') {
+                setCredModal({ member: m, type: 'password', value: m.tempPassword })
+              } else {
+                setCredModal({ member: m, type: 'link', value: m.inviteCode })
+              }
+              toast.success('Member invited', m.name)
+            }}
+            onCancel={() => setShowInvite(false)}
+          />
+        )}
+
+        {/* Member rows */}
         <div>
-          {filtered.map((s, i) => {
-            const isSelected = selected?.id === s.id
+          {filtered.length === 0 && (
+            <div className="px-5 py-10 text-center text-[13px]" style={{ color: 'var(--zp-ink-3)' }}>
+              No members match this filter.
+            </div>
+          )}
+
+          {filtered.map((m, i) => {
+            if (editingId === m.id) {
+              return (
+                <MemberForm
+                  key={m.id}
+                  mode="edit"
+                  initial={m}
+                  onSave={(data) => {
+                    updateMember(m.id, data)
+                    toast.success('Member updated', data.name)
+                    setEditingId(null)
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
+              )
+            }
             return (
-              <div
-                key={s.id}
-                onClick={() => setSelected(isSelected ? null : s)}
-                className="px-5 py-3 cursor-pointer transition-colors"
-                style={{
-                  background: isSelected ? 'var(--zp-primary-soft)' : 'transparent',
-                  borderTop: i > 0 ? '1px solid var(--zp-line)' : 'none',
+              <MemberRow
+                key={m.id}
+                member={m}
+                isAdmin={isAdmin}
+                isSelf={user?.id === m.id}
+                topBorder={i > 0}
+                onEdit={() => { setEditingId(m.id); setShowInvite(false) }}
+                onChangeRole={(role) => { changeRole(m.id, role); toast.success('Role changed', `${m.name} → ${ROLES[role].label}`) }}
+                onSuspend={() => { suspendMember(m.id); toast.warn('Member suspended', m.name) }}
+                onReactivate={() => { reactivateMember(m.id); toast.success('Member reactivated', m.name) }}
+                onRemove={() => {
+                  if (confirm(`Remove ${m.name} from the team? This cannot be undone.`)) {
+                    removeMember(m.id)
+                    toast.error('Member removed', m.name)
+                  }
                 }}
-                onMouseEnter={el => { if (!isSelected) el.currentTarget.style.background = 'var(--zp-surface-2)' }}
-                onMouseLeave={el => { if (!isSelected) el.currentTarget.style.background = 'transparent' }}
-              >
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                    style={{
-                      background: s.role === 'admin'
-                        ? 'linear-gradient(135deg, var(--zp-primary), color-mix(in srgb, var(--zp-primary) 60%, black))'
-                        : s.role === 'staff'
-                        ? 'linear-gradient(135deg, var(--zp-info), color-mix(in srgb, var(--zp-info) 60%, black))'
-                        : 'linear-gradient(135deg, var(--zp-accent), var(--zp-accent-ink))',
-                      color: '#fff',
-                    }}
-                  >
-                    {s.initials}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[14px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{s.name}</span>
-                      {s.status === 'inactive' && <Pill variant="default">inactive</Pill>}
-                    </div>
-                    <div className="font-mono text-[11px] mt-0.5" style={{ color: 'var(--zp-ink-3)' }}>
-                      {s.title}
-                    </div>
-                  </div>
-
-                  <div className="hidden md:flex items-center gap-5 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="font-mono text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>Role</div>
-                      <div className="mt-0.5">
-                        <Pill variant={s.role === 'admin' ? 'accent' : s.role === 'staff' ? 'info' : 'warn'}>{s.role}</Pill>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>Last seen</div>
-                      <div className="font-mono text-[12px] mt-1" style={{ color: 'var(--zp-ink-2)' }}>{s.last_seen}</div>
-                    </div>
-                  </div>
-
-                  <Icons.ChevronRight size={16} style={{ color: 'var(--zp-ink-3)', transform: isSelected ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-                </div>
-
-                {isSelected && (
-                  <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--zp-line)' }}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <Eyebrow>Contact</Eyebrow>
-                        <div className="space-y-1.5 mt-3 text-[12px]">
-                          <div className="flex items-center justify-between"><span style={{ color: 'var(--zp-ink-3)' }}>Email</span><span className="font-mono" style={{ color: 'var(--zp-ink)' }}>{s.email}</span></div>
-                          <div className="flex items-center justify-between"><span style={{ color: 'var(--zp-ink-3)' }}>Phone</span><span className="font-mono" style={{ color: 'var(--zp-ink)' }}>{s.phone}</span></div>
-                          <div className="flex items-center justify-between"><span style={{ color: 'var(--zp-ink-3)' }}>Team</span><span style={{ color: 'var(--zp-ink)' }}>{s.team}</span></div>
-                          <div className="flex items-center justify-between"><span style={{ color: 'var(--zp-ink-3)' }}>Joined</span><span className="font-mono" style={{ color: 'var(--zp-ink)' }}>{s.joined}</span></div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <Eyebrow>Access permissions</Eyebrow>
-                        <div className="space-y-1.5 mt-3 text-[12px]">
-                          {(s.role === 'admin'
-                            ? ['Overview', 'Bookings', 'Revenue', 'Analytics', 'Events', 'Cameras', 'Staff', 'Annotate', 'Settings']
-                            : s.role === 'staff'
-                            ? ['Gate Scanner']
-                            : ['Revenue', 'Analytics', 'Events']
-                          ).map(perm => (
-                            <div key={perm} className="flex items-center gap-2">
-                              <Icons.Check size={12} style={{ color: 'var(--zp-free)' }} />
-                              <span style={{ color: 'var(--zp-ink-2)' }}>{perm}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <Eyebrow>Actions</Eyebrow>
-                        <div className="space-y-1.5 mt-3">
-                          <ActionBtn>Edit profile →</ActionBtn>
-                          <ActionBtn>Change role →</ActionBtn>
-                          {s.role === 'staff' && <ActionBtn>View shift history →</ActionBtn>}
-                          <ActionBtn>Reset password →</ActionBtn>
-                          <ActionBtn danger>Suspend access →</ActionBtn>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                onActivateInvite={() => { activateInvite(m.id); toast.success('Invite completed', m.name) }}
+                onResetPassword={() => {
+                  const temp = resetPassword(m.id)
+                  if (temp) setCredModal({ member: m, type: 'reset', value: temp })
+                }}
+                onShowInvite={() => {
+                  setCredModal({
+                    member: m,
+                    type: m.inviteMethod === 'password' ? 'password' : 'link',
+                    value: m.inviteMethod === 'password' ? m.tempPassword : m.inviteCode,
+                  })
+                }}
+              />
             )
           })}
         </div>
       </Panel>
+
+      {/* Credential modal */}
+      {credModal && (
+        <CredentialModal
+          data={credModal}
+          onClose={() => setCredModal(null)}
+        />
+      )}
     </div>
   )
 }
 
-function ActionBtn({ children, danger }) {
-  const baseColor = danger ? 'var(--zp-full)' : 'var(--zp-ink-2)'
-  const hoverBg = danger ? 'var(--zp-full-soft)' : 'var(--zp-primary-soft)'
-  const hoverColor = danger ? 'var(--zp-full)' : 'var(--zp-primary)'
+/* ── Member row ────────────────────────────────────────────── */
+function MemberRow({ member, isAdmin, isSelf, topBorder, onEdit, onChangeRole, onSuspend, onReactivate, onRemove, onActivateInvite, onResetPassword, onShowInvite }) {
+  const [expanded, setExpanded] = useState(false)
+  const m = member
+  const suspended = m.status === 'suspended'
+  const invited = m.status === 'invited'
+
+  const roleColor = {
+    admin: 'var(--zp-primary)',
+    staff: 'var(--zp-info)',
+    'stadium-rep': 'var(--zp-accent-ink)',
+  }[m.role] || 'var(--zp-ink-3)'
+
+  return (
+    <div style={{ borderTop: topBorder ? '1px solid var(--zp-line)' : 'none', opacity: suspended ? 0.6 : 1 }}>
+      <div className="px-5 py-3 flex items-center gap-3 flex-wrap">
+        {/* Avatar */}
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+          style={{ background: roleColor, color: '#fff' }}
+        >
+          {initialsOf(m.name)}
+        </div>
+
+        {/* Name + title */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[14px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{m.name}</span>
+            {isSelf && <Pill variant="info">you</Pill>}
+            {invited && <Pill variant="warn">invited</Pill>}
+            {suspended && <Pill variant="danger">suspended</Pill>}
+          </div>
+          <div className="font-mono text-[11px] mt-0.5" style={{ color: 'var(--zp-ink-3)' }}>
+            {m.title || 'No title'} · {m.team}
+          </div>
+        </div>
+
+        {/* Role */}
+        <div className="hidden md:block text-right">
+          <div className="font-mono text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>Role</div>
+          <div className="mt-0.5">
+            <Pill variant={m.role === 'admin' ? 'accent' : m.role === 'staff' ? 'info' : 'warn'}>
+              {ROLES[m.role]?.label || m.role}
+            </Pill>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+            style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
+          >
+            {expanded ? 'Less' : 'Details'}
+          </button>
+
+          {/* Self-service password reset — every user, their own account */}
+          {isSelf && m.canResetPassword && (
+            <button
+              onClick={onResetPassword}
+              className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+              style={{ background: 'var(--zp-primary-soft)', color: 'var(--zp-primary)', border: '1px solid var(--zp-primary-soft)' }}
+            >
+              Reset my password
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              onClick={onEdit}
+              className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+              style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded */}
+      {expanded && (
+        <div className="px-5 pb-4">
+          <div className="rounded-md p-4" style={{ background: 'var(--zp-surface-2)' }}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Contact */}
+              <div>
+                <Eyebrow>Contact</Eyebrow>
+                <div className="space-y-1 mt-2 text-[12px]">
+                  <Line label="Email" value={m.email || '—'} mono />
+                  <Line label="Phone" value={m.phone || '—'} mono />
+                  <Line label="Team" value={m.team} />
+                  <Line label="Joined" value={m.joined} mono />
+                </div>
+              </div>
+
+              {/* Access */}
+              <div>
+                <Eyebrow>Access · {ROLES[m.role]?.label}</Eyebrow>
+                <p className="text-[11px] mt-1 mb-2" style={{ color: 'var(--zp-ink-3)' }}>
+                  {ROLES[m.role]?.desc}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {(ROLE_ACCESS[m.role] || []).map(p => (
+                    <span key={p} className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: 'var(--zp-surface)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}>
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Admin controls */}
+              <div>
+                <Eyebrow>Manage</Eyebrow>
+                {isAdmin ? (
+                  <div className="space-y-2 mt-2">
+                    {/* Role selector */}
+                    <div>
+                      <label className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--zp-ink-3)' }}>Change role</label>
+                      <select
+                        value={m.role}
+                        onChange={e => onChangeRole(e.target.value)}
+                        className="w-full mt-1 px-2 py-1.5 text-[12px] rounded-md outline-none"
+                        style={{ background: 'var(--zp-surface)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
+                      >
+                        {Object.entries(ROLES).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Buttons */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {invited && (
+                        <ManageBtn onClick={onShowInvite} tone="info">Show invite</ManageBtn>
+                      )}
+                      {invited && (
+                        <ManageBtn onClick={onActivateInvite} tone="free">Mark joined</ManageBtn>
+                      )}
+                      <ManageBtn onClick={onResetPassword} tone="info">Reset password</ManageBtn>
+                      {suspended
+                        ? <ManageBtn onClick={onReactivate} tone="free">Reactivate</ManageBtn>
+                        : <ManageBtn onClick={onSuspend} tone="busy">Suspend</ManageBtn>}
+                      <ManageBtn onClick={onRemove} tone="full">Remove</ManageBtn>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] mt-2" style={{ color: 'var(--zp-ink-3)' }}>
+                    Only admins can manage team members.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ManageBtn({ children, onClick, tone }) {
+  const map = {
+    info: { bg: 'var(--zp-surface)', fg: 'var(--zp-ink-2)', bd: 'var(--zp-line)' },
+    free: { bg: 'var(--zp-free-soft)', fg: 'var(--zp-free)', bd: 'color-mix(in srgb, var(--zp-free) 30%, transparent)' },
+    busy: { bg: 'var(--zp-busy-soft)', fg: 'var(--zp-busy)', bd: 'color-mix(in srgb, var(--zp-busy) 30%, transparent)' },
+    full: { bg: 'var(--zp-full-soft)', fg: 'var(--zp-full)', bd: 'color-mix(in srgb, var(--zp-full) 30%, transparent)' },
+  }
+  const t = map[tone] || map.info
   return (
     <button
-      className="w-full text-left px-3 py-2 text-[12px] rounded-md transition-colors"
-      style={{ color: baseColor }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = hoverBg
-        e.currentTarget.style.color = hoverColor
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'transparent'
-        e.currentTarget.style.color = baseColor
-      }}
+      onClick={onClick}
+      className="px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+      style={{ background: t.bg, color: t.fg, border: `1px solid ${t.bd}` }}
     >
       {children}
     </button>
+  )
+}
+
+function Line({ label, value, mono }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span style={{ color: 'var(--zp-ink-3)' }}>{label}</span>
+      <span className={mono ? 'font-mono' : ''} style={{ color: 'var(--zp-ink)' }}>{value}</span>
+    </div>
+  )
+}
+
+/* ── Invite / Edit form ────────────────────────────────────── */
+function MemberForm({ mode, initial, onSave, onCancel }) {
+  const [f, setF] = useState({
+    name: initial?.name || '',
+    email: initial?.email || '',
+    phone: initial?.phone || '',
+    role: initial?.role || 'staff',
+    title: initial?.title || '',
+    team: initial?.team || 'Operations',
+    method: 'link',
+  })
+  const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
+
+  const inputStyle = { background: 'var(--zp-surface)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }
+  const labelCls = 'font-mono text-[10px] uppercase tracking-[0.14em]'
+
+  return (
+    <div className="px-5 py-4" style={{ background: 'var(--zp-primary-soft)', borderBottom: '1px solid var(--zp-line)' }}>
+      <Eyebrow>{mode === 'invite' ? 'Invite a new member' : `Edit · ${initial.name}`}</Eyebrow>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Full name</label>
+          <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Jean Mukiza"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Email</label>
+          <input value={f.email} onChange={e => set('email', e.target.value)} placeholder="name@example.com"
+            className="w-full mt-1 px-3 py-2 text-[13px] font-mono rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-4">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Phone</label>
+          <input value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="+250 7XX XXX XXX"
+            className="w-full mt-1 px-3 py-2 text-[13px] font-mono rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-4">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Title / position</label>
+          <input value={f.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Gate Operator"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-4">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Team</label>
+          <input value={f.team} onChange={e => set('team', e.target.value)} placeholder="e.g. Gate Operations"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+
+        {/* Role */}
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Role · access level</label>
+          <select value={f.role} onChange={e => set('role', e.target.value)}
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle}>
+            {Object.entries(ROLES).map(([k, v]) => (
+              <option key={k} value={k}>{v.label} — {v.desc}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Invite method — only when inviting */}
+        {mode === 'invite' && (
+          <div className="md:col-span-6">
+            <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Invite method</label>
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => set('method', 'link')}
+                className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+                style={{
+                  background: f.method === 'link' ? 'var(--zp-primary)' : 'var(--zp-surface)',
+                  color: f.method === 'link' ? '#fff' : 'var(--zp-ink-2)',
+                  border: '1px solid ' + (f.method === 'link' ? 'var(--zp-primary)' : 'var(--zp-line)'),
+                }}
+              >
+                Invite link
+              </button>
+              <button
+                onClick={() => set('method', 'password')}
+                className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+                style={{
+                  background: f.method === 'password' ? 'var(--zp-primary)' : 'var(--zp-surface)',
+                  color: f.method === 'password' ? '#fff' : 'var(--zp-ink-2)',
+                  border: '1px solid ' + (f.method === 'password' ? 'var(--zp-primary)' : 'var(--zp-line)'),
+                }}
+              >
+                Temp password
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {mode === 'invite' && (
+        <div className="mt-2 font-mono text-[10px]" style={{ color: 'var(--zp-ink-3)' }}>
+          {f.method === 'link'
+            ? 'A shareable invite code will be generated — send it to the member to complete setup.'
+            : 'A temporary password will be generated — share it with the member directly.'}
+          {'  '}Password-reset permission is granted automatically.
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-3">
+        <button onClick={onCancel}
+          className="px-4 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+          style={{ background: 'var(--zp-surface)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}>
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            if (!f.name.trim()) { alert('Name is required'); return }
+            onSave(f)
+          }}
+          className="px-4 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+          style={{ background: 'var(--zp-primary)', color: '#fff' }}>
+          {mode === 'invite' ? 'Send invite' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── Credential modal ──────────────────────────────────────── */
+function CredentialModal({ data, onClose }) {
+  const { member, type, value } = data
+  const [copied, setCopied] = useState(false)
+
+  const title = type === 'reset' ? 'Password reset' : type === 'password' ? 'Temporary password' : 'Invite link'
+  const desc = type === 'reset'
+    ? `A new temporary password for ${member.name}. Share it securely — they should change it after signing in.`
+    : type === 'password'
+    ? `Share this temporary password with ${member.name} so they can sign in for the first time.`
+    : `Send this invite code to ${member.name}. They use it to complete their account setup.`
+
+  const copy = () => {
+    navigator.clipboard?.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+      <div className="zp-card p-6 w-96" style={{ boxShadow: 'var(--zp-shadow-3)' }}>
+        <Eyebrow>{title}</Eyebrow>
+        <h3 className="text-lg font-semibold mt-1" style={{ color: 'var(--zp-ink)' }}>{member.name}</h3>
+        <p className="text-[12px] mt-2" style={{ color: 'var(--zp-ink-2)' }}>{desc}</p>
+
+        <div
+          className="mt-4 flex items-center justify-between gap-3 px-4 py-3 rounded-md"
+          style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)' }}
+        >
+          <span className="font-mono text-[15px] font-bold" style={{ color: 'var(--zp-ink)' }}>{value}</span>
+          <button
+            onClick={copy}
+            className="px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+            style={{ background: copied ? 'var(--zp-free)' : 'var(--zp-primary)', color: '#fff' }}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+
+        <div className="mt-3 font-mono text-[10px]" style={{ color: 'var(--zp-ink-3)' }}>
+          Note: real delivery (email / SMS) is sent automatically once the backend auth service is connected.
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+          style={{ background: 'var(--zp-primary)', color: '#fff' }}
+        >
+          Done
+        </button>
+      </div>
+    </div>
   )
 }
