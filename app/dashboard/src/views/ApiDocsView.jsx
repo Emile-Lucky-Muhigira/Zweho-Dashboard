@@ -304,7 +304,7 @@ export default function ApiDocsView() {
           ))}
         </div>
         <div className="font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>
-          Last updated: 2026-05-16 · Contact <span style={{ color: 'var(--zp-ink-2)' }}>Bruno Payang</span> for changes
+          Contact <span style={{ color: 'var(--zp-ink-2)' }}>Bruno Payang</span> for endpoint changes
         </div>
       </div>
     </div>

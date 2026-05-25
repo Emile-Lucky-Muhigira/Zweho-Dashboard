@@ -1,37 +1,27 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getOccupancy } from '../lib/api'
-import { ZONES, OCCUPANCY_REFRESH_MS, CV_CONFIDENCE_THRESHOLD } from '../lib/constants'
-import { generatePlate } from '../lib/mockData'
-import { Panel, MetricCard, Pill, LegendDot, DataRow, Eyebrow } from '../components/ui'
+import { getOccupancy, isOffline } from '../lib/api'
+import { OCCUPANCY_REFRESH_MS, CV_CONFIDENCE_THRESHOLD } from '../lib/constants'
+import { useZones } from '../lib/zonesStore'
+import { Panel, MetricCard, Pill, DataRow } from '../components/ui'
+import { Icons } from '../components/Icons'
 
 export default function LiveOccupancyView() {
   const [selectedSpot, setSelectedSpot] = useState(null)
   const [selectedZone, setSelectedZone] = useState('all')
 
-  const { data: rawSpots = [] } = useQuery({
+  const { activeZones } = useZones()
+  const ZONES = activeZones
+
+  // Real occupancy from the backend. Empty until Bruno's API is live.
+  const { data: spots = [] } = useQuery({
     queryKey: ['occupancy'],
     queryFn: getOccupancy,
     refetchInterval: OCCUPANCY_REFRESH_MS,
   })
 
-  const [spots, setSpots] = useState([])
-  useEffect(() => { setSpots(rawSpots) }, [rawSpots])
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSpots(prev => {
-        if (!prev.length) return prev
-        const next = [...prev]
-        const idx = Math.floor(Math.random() * next.length)
-        const cur = next[idx]
-        if (cur.status === 'occupied') next[idx] = { ...cur, status: 'free', plate: null, lastUpdate: Date.now() }
-        else if (cur.status === 'free') next[idx] = { ...cur, status: 'occupied', plate: generatePlate(), lastUpdate: Date.now() }
-        return next
-      })
-    }, 4000)
-    return () => clearInterval(id)
-  }, [])
+  const offline = isOffline(spots)
+  const hasData = spots.length > 0
 
   const stats = useMemo(() => {
     const total = spots.length
@@ -52,10 +42,21 @@ export default function LiveOccupancyView() {
 
   return (
     <div className="space-y-5 fade-in">
-      <LiveTicker spots={spots} />
+      {/* Status banner */}
+      <div className="zp-card px-5 py-3 flex items-center gap-3 flex-wrap">
+        <span
+          className="w-1.5 h-1.5 rounded-full"
+          style={{ background: hasData ? 'var(--zp-free)' : 'var(--zp-ink-3)' }}
+        ></span>
+        <span className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
+          {hasData
+            ? 'Live occupancy from the CV pipeline via MQTT.'
+            : 'Waiting for the CV pipeline. Spot occupancy will appear here once the cameras and backend are connected.'}
+        </span>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-        <MetricCard label="Total Occupancy" value={stats.pct} unit="%" delta="+8% / hr" tone="busy" />
+        <MetricCard label="Total Occupancy" value={hasData ? stats.pct : '—'} unit={hasData ? '%' : ''} tone="busy" />
         <MetricCard label="Occupied" value={stats.occupied} unit={`/ ${stats.total}`} tone="info" />
         <MetricCard label="Available" value={stats.free} tone="free" />
         <MetricCard label="Reserved" value={stats.reserved} tone="info" />
@@ -98,16 +99,33 @@ export default function LiveOccupancyView() {
                   </div>
                 </div>
 
-                <ZoneCluster spots={filteredSpots.filter(s => s.zone === 'A')} zoneId="A"
-                  position="absolute top-0 left-1/2 -translate-x-1/2" onSpotClick={setSelectedSpot} />
-                <ZoneCluster spots={filteredSpots.filter(s => s.zone === 'B')} zoneId="B"
-                  position="absolute right-0 top-1/2 -translate-y-1/2" onSpotClick={setSelectedSpot} />
-                <ZoneCluster spots={filteredSpots.filter(s => s.zone === 'C')} zoneId="C"
-                  position="absolute left-0 top-0" onSpotClick={setSelectedSpot} />
-                <ZoneCluster spots={filteredSpots.filter(s => s.zone === 'D')} zoneId="D"
-                  position="absolute bottom-0 left-1/2 -translate-x-1/2" onSpotClick={setSelectedSpot} />
-                <ZoneCluster spots={filteredSpots.filter(s => s.zone === 'E')} zoneId="E"
-                  position="absolute left-0 top-1/2 -translate-y-1/2" onSpotClick={setSelectedSpot} />
+                {hasData ? (
+                  ZONES.map(z => (
+                    <ZoneCluster
+                      key={z.id}
+                      ZONES={ZONES}
+                      spots={filteredSpots.filter(s => s.zone === z.id)}
+                      zoneId={z.id}
+                      position={ZONE_POSITIONS[z.id] || 'absolute top-0 left-1/2 -translate-x-1/2'}
+                      onSpotClick={setSelectedSpot}
+                    />
+                  ))
+                ) : (
+                  <div className="text-center px-6">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                      style={{ background: 'rgba(255,255,255,0.06)' }}
+                    >
+                      <Icons.Map size={22} style={{ color: 'rgba(255,255,255,0.4)' }} />
+                    </div>
+                    <div className="font-mono text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                      No live spot data
+                    </div>
+                    <div className="text-[12px] mt-1.5 max-w-xs mx-auto" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      Spot tiles appear here as soon as the CV pipeline starts publishing occupancy.
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-5 flex items-center gap-5 pt-3 flex-wrap" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -150,26 +168,19 @@ export default function LiveOccupancyView() {
                   <Pill variant={selectedSpot.status === 'occupied' ? 'warn' : selectedSpot.status === 'free' ? 'success' : selectedSpot.status === 'reserved' ? 'info' : 'default'}>
                     {selectedSpot.status}
                   </Pill>
-                  {selectedSpot.stale && <Pill variant="warn">stale {Math.floor((Date.now() - selectedSpot.lastUpdate) / 60000)}m</Pill>}
                   {selectedSpot.confidence < CV_CONFIDENCE_THRESHOLD && selectedSpot.status !== 'offline' && (
                     <Pill variant="warn">low conf</Pill>
                   )}
                 </div>
-                <DataRow label="Zone" value={ZONES.find(z => z.id === selectedSpot.zone)?.name} />
+                <DataRow label="Zone" value={ZONES.find(z => z.id === selectedSpot.zone)?.name || selectedSpot.zone} />
                 {selectedSpot.plate && <DataRow label="Plate (CV)" value={selectedSpot.plate} mono />}
-                <DataRow label="Confidence" value={`${(selectedSpot.confidence * 100).toFixed(1)}%`} mono />
-                <DataRow label="Last update" value={`${Math.floor((Date.now() - selectedSpot.lastUpdate) / 1000)}s ago`} mono />
+                {selectedSpot.confidence != null && (
+                  <DataRow label="Confidence" value={`${(selectedSpot.confidence * 100).toFixed(1)}%`} mono />
+                )}
+                {selectedSpot.lastUpdate && (
+                  <DataRow label="Last update" value={`${Math.floor((Date.now() - selectedSpot.lastUpdate) / 1000)}s ago`} mono />
+                )}
                 <DataRow label="MQTT topic" value={`zweho/zones/${selectedSpot.zone}/occupancy`} mono small />
-                <div className="pt-2 flex gap-2" style={{ borderTop: '1px solid var(--zp-line)' }}>
-                  <button
-                    className="flex-1 text-[11px] font-mono uppercase tracking-[0.12em] py-2 rounded-md"
-                    style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
-                  >Flag for review</button>
-                  <button
-                    className="flex-1 text-[11px] font-mono uppercase tracking-[0.12em] py-2 rounded-md"
-                    style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
-                  >View camera</button>
-                </div>
               </div>
             ) : (
               <div className="text-center py-6 text-[13px]" style={{ color: 'var(--zp-ink-3)' }}>
@@ -178,21 +189,12 @@ export default function LiveOccupancyView() {
             )}
           </Panel>
 
-          <Panel title="Recent Activity" subtitle="Last 5 events">
-            <div className="space-y-2.5">
-              {[
-                { t: '12s', type: 'spot',    msg: 'A-14 occupied',           tone: 'busy' },
-                { t: '34s', type: 'booking', msg: 'BK-2847 confirmed',       tone: 'free' },
-                { t: '1m',  type: 'qr',      msg: 'Gate North · validated',  tone: 'info' },
-                { t: '1m',  type: 'spot',    msg: 'B-07 freed',              tone: 'busy' },
-                { t: '2m',  type: 'cv',      msg: 'Low confidence C-03',     tone: 'accent' },
-              ].map((a, i) => (
-                <div key={i} className="flex items-start gap-2.5 text-[12px]">
-                  <span className="font-mono tabular-nums w-7" style={{ color: 'var(--zp-ink-3)' }}>{a.t}</span>
-                  <span className={`zp-badge zp-badge--${a.tone}`} style={{ minWidth: 50, justifyContent: 'center' }}>{a.type}</span>
-                  <span className="leading-tight" style={{ color: 'var(--zp-ink-2)' }}>{a.msg}</span>
-                </div>
-              ))}
+          <Panel title="Recent Activity" subtitle="Live events">
+            <div className="text-center py-6">
+              <div className="text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>No activity yet</div>
+              <p className="text-[12px] mt-1" style={{ color: 'var(--zp-ink-2)' }}>
+                Spot changes, bookings, and gate scans will stream here once the backend is connected.
+              </p>
             </div>
           </Panel>
         </div>
@@ -201,41 +203,13 @@ export default function LiveOccupancyView() {
   )
 }
 
-function LiveTicker({ spots }) {
-  const events = useMemo(() => {
-    const recent = [...spots].sort((a, b) => b.lastUpdate - a.lastUpdate).slice(0, 8)
-    return recent.map(s => ({
-      time: new Date(s.lastUpdate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      label: s.status === 'occupied' ? 'OCCUPIED' : s.status === 'free' ? 'FREED' : 'UPDATE',
-      spot: s.id,
-      detail: s.plate ? `plate ${s.plate}` : `confidence ${(s.confidence * 100).toFixed(0)}%`,
-      tone: s.status === 'occupied' ? 'busy' : 'free',
-    }))
-  }, [spots])
-
-  if (!events.length) return null
-  return (
-    <div className="zp-card overflow-hidden">
-      <div className="flex items-center">
-        <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0" style={{ borderRight: '1px solid var(--zp-line)' }}>
-          <span className="w-1.5 h-1.5 rounded-full zp-pulse-dot" style={{ background: 'var(--zp-free)' }}></span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] font-semibold" style={{ color: 'var(--zp-free)' }}>Live feed</span>
-        </div>
-        <div className="flex-1 overflow-x-auto py-2 px-3">
-          <div className="flex items-center gap-6 whitespace-nowrap">
-            {events.map((e, i) => (
-              <span key={i} className="flex items-center gap-2 text-[12px]">
-                <span className="font-mono" style={{ color: 'var(--zp-ink-3)' }}>{e.time}</span>
-                <span className={`zp-badge zp-badge--${e.tone}`}>{e.label}</span>
-                <span className="font-mono font-semibold" style={{ color: 'var(--zp-ink)' }}>{e.spot}</span>
-                <span style={{ color: 'var(--zp-ink-2)' }}>· {e.detail}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+// Fixed map positions per zone id.
+const ZONE_POSITIONS = {
+  A: 'absolute top-0 left-1/2 -translate-x-1/2',
+  B: 'absolute right-0 top-1/2 -translate-y-1/2',
+  C: 'absolute left-0 top-0',
+  D: 'absolute bottom-0 left-1/2 -translate-x-1/2',
+  E: 'absolute left-0 top-1/2 -translate-y-1/2',
 }
 
 function ZoneButton({ children, selected, onClick }) {
@@ -254,14 +228,14 @@ function ZoneButton({ children, selected, onClick }) {
   )
 }
 
-function ZoneCluster({ spots, zoneId, position, onSpotClick }) {
+function ZoneCluster({ spots, zoneId, position, onSpotClick, ZONES }) {
   const zone = ZONES.find(z => z.id === zoneId)
   const cols = zoneId === 'C' ? 4 : zoneId === 'E' ? 3 : 8
 
   return (
     <div className={position}>
       <div className="text-center mb-1.5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: zone.color }}>
+        <div className="font-mono text-[10px] uppercase tracking-[0.2em] font-bold" style={{ color: zone?.color || 'var(--zp-ink-3)' }}>
           Zone {zoneId}
         </div>
       </div>

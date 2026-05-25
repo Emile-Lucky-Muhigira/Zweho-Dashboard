@@ -1,134 +1,45 @@
 import React, { useState } from 'react'
 import { Panel, MetricCard, Pill, Eyebrow, DataRow } from '../components/ui'
 import { Icons } from '../components/Icons'
+import { useDevices } from '../lib/devicesStore'
+import { useToast } from '../lib/toast'
 
-const DEVICES = [
-  {
-    id: 'VPS_PRIMARY',
-    name: 'Cloud VPS · Primary',
-    role: 'Backend · API · Database · MQTT broker',
-    type: 'vps',
-    location: 'Hetzner · Falkenstein, DE',
-    status: 'healthy',
-    cpu: { model: 'AMD EPYC 7702P', cores: 8, threads: 16, freq_ghz: 2.0, usage_pct: 34 },
-    ram: { total_gb: 32, used_gb: 18.2, swap_used_gb: 0.1 },
-    gpu: null,
-    storage: { total_gb: 480, used_gb: 89, type: 'NVMe SSD' },
-    network: { down_mbps: 1000, up_mbps: 1000, current_mbps: 12.4, latency_kgl_ms: 142 },
-    os: 'Ubuntu 24.04 LTS',
-    uptime_days: 47.2,
-    services: [
-      { name: 'fastapi-backend', status: 'running', cpu_pct: 8.2, mem_mb: 412 },
-      { name: 'postgresql-15', status: 'running', cpu_pct: 4.1, mem_mb: 1820 },
-      { name: 'mosquitto-mqtt', status: 'running', cpu_pct: 0.4, mem_mb: 38 },
-      { name: 'nginx', status: 'running', cpu_pct: 0.2, mem_mb: 22 },
-      { name: 'redis', status: 'running', cpu_pct: 0.6, mem_mb: 96 },
-    ],
-  },
-  {
-    id: 'EDGE_NORTH',
-    name: 'Edge Device · North',
-    role: 'YOLOv8 inference · Cameras: CAM_NORTH_01, CAM_VIP_03',
-    type: 'edge',
-    location: 'Amahoro Stadium · Server room A',
-    status: 'healthy',
-    cpu: { model: 'ARM Cortex-A78AE', cores: 6, threads: 6, freq_ghz: 1.5, usage_pct: 62 },
-    ram: { total_gb: 8, used_gb: 5.4, swap_used_gb: 0 },
-    gpu: { model: 'NVIDIA Jetson Orin Nano (Ampere)', cores_cuda: 1024, vram_gb: 8, usage_pct: 71, temp_c: 58 },
-    storage: { total_gb: 256, used_gb: 32, type: 'NVMe SSD' },
-    network: { down_mbps: 1000, up_mbps: 1000, current_mbps: 4.8, latency_kgl_ms: 1 },
-    os: 'NVIDIA JetPack 6.0 (Ubuntu 22.04)',
-    uptime_days: 12.8,
-    services: [
-      { name: 'yolov8-inference', status: 'running', cpu_pct: 45, mem_mb: 3200 },
-      { name: 'mqtt-publisher',   status: 'running', cpu_pct: 1.2, mem_mb: 64 },
-      { name: 'rtsp-ingester',    status: 'running', cpu_pct: 8.4, mem_mb: 280 },
-    ],
-  },
-  {
-    id: 'EDGE_SOUTH',
-    name: 'Edge Device · South',
-    role: 'YOLOv8 inference · Cameras: CAM_SOUTH_04, CAM_PRESS_05',
-    type: 'edge',
-    location: 'Amahoro Stadium · Server room B',
-    status: 'warning',
-    cpu: { model: 'ARM Cortex-A78AE', cores: 6, threads: 6, freq_ghz: 1.5, usage_pct: 86 },
-    ram: { total_gb: 8, used_gb: 7.1, swap_used_gb: 0.4 },
-    gpu: { model: 'NVIDIA Jetson Orin Nano (Ampere)', cores_cuda: 1024, vram_gb: 8, usage_pct: 89, temp_c: 71 },
-    storage: { total_gb: 256, used_gb: 42, type: 'NVMe SSD' },
-    network: { down_mbps: 1000, up_mbps: 1000, current_mbps: 3.2, latency_kgl_ms: 1 },
-    os: 'NVIDIA JetPack 6.0 (Ubuntu 22.04)',
-    uptime_days: 0.4,
-    services: [
-      { name: 'yolov8-inference', status: 'running', cpu_pct: 71, mem_mb: 4100 },
-      { name: 'mqtt-publisher',   status: 'running', cpu_pct: 1.4, mem_mb: 64 },
-      { name: 'rtsp-ingester',    status: 'warning', cpu_pct: 12.1, mem_mb: 320 },
-    ],
-    warnings: [
-      'GPU temp 71°C (threshold: 70°C)',
-      'CAM_PRESS_05 RTSP stream dropping packets',
-      'Last restarted 9 hours ago',
-    ],
-  },
-  {
-    id: 'EDGE_EAST',
-    name: 'Edge Device · East',
-    role: 'YOLOv8 inference · Cameras: CAM_EAST_02',
-    type: 'edge',
-    location: 'Amahoro Stadium · Server room A',
-    status: 'healthy',
-    cpu: { model: 'ARM Cortex-A78AE', cores: 6, threads: 6, freq_ghz: 1.5, usage_pct: 38 },
-    ram: { total_gb: 8, used_gb: 3.2, swap_used_gb: 0 },
-    gpu: { model: 'NVIDIA Jetson Orin Nano (Ampere)', cores_cuda: 1024, vram_gb: 8, usage_pct: 42, temp_c: 51 },
-    storage: { total_gb: 256, used_gb: 28, type: 'NVMe SSD' },
-    network: { down_mbps: 1000, up_mbps: 1000, current_mbps: 2.1, latency_kgl_ms: 1 },
-    os: 'NVIDIA JetPack 6.0 (Ubuntu 22.04)',
-    uptime_days: 12.8,
-    services: [
-      { name: 'yolov8-inference', status: 'running', cpu_pct: 28, mem_mb: 2400 },
-      { name: 'mqtt-publisher',   status: 'running', cpu_pct: 1.0, mem_mb: 58 },
-      { name: 'rtsp-ingester',    status: 'running', cpu_pct: 5.2, mem_mb: 220 },
-    ],
-  },
-  {
-    id: 'TABLET_NORTH',
-    name: 'Gate Tablet · North',
-    role: 'QR Scanner · Operated by Daniel K.',
-    type: 'tablet',
-    location: 'Amahoro · North gate booth',
-    status: 'healthy',
-    cpu: { model: 'Snapdragon 7+ Gen 3', cores: 8, threads: 8, freq_ghz: 2.8, usage_pct: 18 },
-    ram: { total_gb: 8, used_gb: 2.4, swap_used_gb: 0 },
-    gpu: null,
-    storage: { total_gb: 128, used_gb: 14, type: 'UFS 3.1' },
-    network: { down_mbps: 100, up_mbps: 100, current_mbps: 0.8, latency_kgl_ms: 18 },
-    os: 'Android 14',
-    uptime_days: 4.2,
-    services: [
-      { name: 'zweho-scanner-app', status: 'running', cpu_pct: 12, mem_mb: 320 },
-    ],
-  },
-]
+const TYPE_LABEL = { vps: 'Cloud VPS', edge: 'Edge Device', tablet: 'Gate Tablet' }
 
 export default function EdgeDevicesView() {
-  const [selected, setSelected] = useState(DEVICES[1]) // edge devices are the most interesting default
-  const [filter, setFilter] = useState('all')
+  const { devices, addDevice, updateDevice, removeDevice } = useDevices()
+  const toast = useToast()
 
-  const filtered = filter === 'all' ? DEVICES : DEVICES.filter(d => d.type === filter)
+  const [selectedId, setSelectedId] = useState(null)
+  const [filter, setFilter] = useState('all')
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+
+  const filtered = filter === 'all' ? devices : devices.filter(d => d.type === filter)
+  const selected = devices.find(d => d.id === selectedId) || null
 
   const counts = {
-    healthy: DEVICES.filter(d => d.status === 'healthy').length,
-    warning: DEVICES.filter(d => d.status === 'warning').length,
-    offline: DEVICES.filter(d => d.status === 'offline').length,
+    vps: devices.filter(d => d.type === 'vps').length,
+    edge: devices.filter(d => d.type === 'edge').length,
+    tablet: devices.filter(d => d.type === 'tablet').length,
   }
 
   return (
     <div className="space-y-5 fade-in">
+      {/* Context banner */}
+      <div className="zp-card px-5 py-3 flex items-center gap-3 flex-wrap">
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--zp-ink-3)' }}></span>
+        <span className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
+          This is the infrastructure inventory. Live metrics (CPU, memory, temperature, running
+          services) appear once a monitoring agent is installed on each machine.
+        </span>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <MetricCard label="Total Hosts" value={DEVICES.length} unit="machines" tone="info" />
-        <MetricCard label="Healthy" value={counts.healthy} tone="free" delta={counts.warning + counts.offline === 0 ? 'all systems go' : null} />
-        <MetricCard label="Warnings" value={counts.warning} tone={counts.warning > 0 ? 'busy' : 'free'} delta={counts.warning > 0 ? 'needs review' : null} />
-        <MetricCard label="Offline" value={counts.offline} tone={counts.offline > 0 ? 'full' : 'free'} />
+        <MetricCard label="Total Hosts" value={devices.length} unit="machines" tone="info" />
+        <MetricCard label="Cloud VPS" value={counts.vps} tone="info" />
+        <MetricCard label="Edge Devices" value={counts.edge} tone="info" />
+        <MetricCard label="Gate Tablets" value={counts.tablet} tone="info" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5">
@@ -136,42 +47,86 @@ export default function EdgeDevicesView() {
         <div className="lg:col-span-5">
           <Panel
             title="Host Machines"
-            subtitle="All running services"
+            subtitle="Infrastructure inventory"
             noPadding
             action={
-              <div className="flex items-center gap-1">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'vps', label: 'Cloud' },
-                  { id: 'edge', label: 'Edge' },
-                  { id: 'tablet', label: 'Tablets' },
-                ].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setFilter(f.id)}
-                    className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.12em] rounded font-semibold transition-colors"
-                    style={{
-                      background: filter === f.id ? 'var(--zp-primary-soft)' : 'transparent',
-                      color: filter === f.id ? 'var(--zp-primary)' : 'var(--zp-ink-2)',
-                    }}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={() => { setShowForm(true); setEditingId(null) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+                style={{ background: 'var(--zp-primary)', color: '#fff' }}
+              >
+                <Icons.Plus size={13} /> Add device
+              </button>
             }
           >
-            <div>
-              {filtered.map((d, i) => {
-                const isSelected = selected?.id === d.id
-                const iconBg = d.status === 'healthy' ? 'var(--zp-free-soft)' : d.status === 'warning' ? 'var(--zp-busy-soft)' : 'var(--zp-full-soft)'
-                const iconColor = d.status === 'healthy' ? 'var(--zp-free)' : d.status === 'warning' ? 'var(--zp-busy)' : 'var(--zp-full)'
-                const TypeIcon = d.type === 'vps' ? Icons.Server : d.type === 'edge' ? Icons.Server : Icons.QrCode
+            {/* Filter chips */}
+            <div className="flex items-center gap-1 px-5 py-3" style={{ borderBottom: '1px solid var(--zp-line)', background: 'var(--zp-surface-2)' }}>
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'vps', label: 'Cloud' },
+                { id: 'edge', label: 'Edge' },
+                { id: 'tablet', label: 'Tablets' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.12em] rounded font-semibold transition-colors"
+                  style={{
+                    background: filter === f.id ? 'var(--zp-primary-soft)' : 'transparent',
+                    color: filter === f.id ? 'var(--zp-primary)' : 'var(--zp-ink-2)',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
+            {/* Add form */}
+            {showForm && (
+              <DeviceForm
+                mode="add"
+                onSave={(data) => {
+                  const d = addDevice(data)
+                  setShowForm(false)
+                  setSelectedId(d.id)
+                  toast.success('Device added', d.name)
+                }}
+                onCancel={() => setShowForm(false)}
+              />
+            )}
+
+            <div>
+              {filtered.length === 0 && !showForm && (
+                <div className="px-5 py-12 text-center">
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>
+                    {devices.length === 0 ? 'No devices registered' : 'No devices match this filter'}
+                  </div>
+                  <p className="text-[12px] mt-1 max-w-xs mx-auto" style={{ color: 'var(--zp-ink-2)' }}>
+                    {devices.length === 0
+                      ? 'Add your VPS, edge devices, and gate tablets to track the project\u2019s infrastructure.'
+                      : 'Try a different filter.'}
+                  </p>
+                </div>
+              )}
+
+              {filtered.map((d, i) => {
+                if (editingId === d.id) {
+                  return (
+                    <DeviceForm
+                      key={d.id}
+                      mode="edit"
+                      initial={d}
+                      onSave={(data) => { updateDevice(d.id, data); setEditingId(null); toast.success('Device updated', data.name) }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  )
+                }
+                const isSelected = selectedId === d.id
+                const TypeIcon = d.type === 'tablet' ? Icons.QrCode : Icons.Server
                 return (
                   <div
                     key={d.id}
-                    onClick={() => setSelected(d)}
+                    onClick={() => setSelectedId(d.id)}
                     className="px-5 py-3.5 cursor-pointer transition-colors"
                     style={{
                       background: isSelected ? 'var(--zp-primary-soft)' : 'transparent',
@@ -181,23 +136,20 @@ export default function EdgeDevicesView() {
                     onMouseLeave={el => { if (!isSelected) el.currentTarget.style.background = 'transparent' }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="relative w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ background: iconBg, color: iconColor }}>
+                      <div className="w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)' }}>
                         <TypeIcon size={20} />
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2"
-                          style={{ background: iconColor, borderColor: 'var(--zp-surface)' }}></span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[14px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{d.name}</span>
                           <Pill variant={d.type === 'vps' ? 'accent' : d.type === 'edge' ? 'info' : 'default'}>{d.type}</Pill>
                         </div>
-                        <div className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--zp-ink-3)' }}>{d.id}</div>
+                        <div className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--zp-ink-3)' }}>
+                          {d.id}{d.location ? ` \u00b7 ${d.location}` : ''}
+                        </div>
                       </div>
-                      <div className="hidden md:block text-right">
-                        <div className="font-mono text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>CPU</div>
-                        <div className="font-mono text-[12px] font-semibold mt-0.5" style={{ color: d.cpu.usage_pct > 80 ? 'var(--zp-busy)' : 'var(--zp-ink)' }}>{d.cpu.usage_pct}%</div>
-                      </div>
+                      <Icons.ChevronRight size={16} style={{ color: 'var(--zp-ink-3)' }} />
                     </div>
                   </div>
                 )
@@ -208,133 +160,84 @@ export default function EdgeDevicesView() {
 
         {/* Device detail */}
         <div className="lg:col-span-7 space-y-4">
-          {selected && (
+          {!selected ? (
+            <Panel title="Device detail">
+              <div className="text-center py-10 text-[13px]" style={{ color: 'var(--zp-ink-3)' }}>
+                Select a device from the list to see its specifications.
+              </div>
+            </Panel>
+          ) : (
             <>
-              {/* Header */}
               <Panel
                 title={selected.name}
-                subtitle={selected.role}
-                action={<Pill variant={selected.status === 'healthy' ? 'success' : selected.status === 'warning' ? 'warn' : 'danger'}>{selected.status}</Pill>}
+                subtitle={selected.role || TYPE_LABEL[selected.type]}
+                action={
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => { setEditingId(selected.id); setShowForm(false) }}
+                      className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+                      style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Remove ${selected.name}?`)) {
+                          removeDevice(selected.id); setSelectedId(null); toast.error('Device removed', selected.name)
+                        }
+                      }}
+                      className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+                      style={{ background: 'var(--zp-full-soft)', color: 'var(--zp-full)', border: '1px solid color-mix(in srgb, var(--zp-full) 30%, transparent)' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                }
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
                   <DataRow label="Device ID" value={selected.id} mono small />
-                  <DataRow label="Location" value={selected.location} small />
-                  <DataRow label="OS" value={selected.os} small />
-                  <DataRow label="Uptime" value={`${selected.uptime_days.toFixed(1)} days`} mono small />
+                  <DataRow label="Type" value={TYPE_LABEL[selected.type]} small />
+                  <DataRow label="Location" value={selected.location || '\u2014'} small />
+                  <DataRow label="OS" value={selected.os || '\u2014'} small />
+                  <DataRow label="Added" value={selected.addedAt} mono small />
                 </div>
               </Panel>
 
-              {/* Hardware specs */}
+              {/* Hardware specs — admin-entered, real */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SpecCard title="CPU" subtitle={selected.cpu.model}>
-                  <div className="space-y-2.5">
-                    <Gauge label="Usage" value={selected.cpu.usage_pct} max={100} unit="%" />
-                    <DataRow label="Cores / Threads" value={`${selected.cpu.cores} / ${selected.cpu.threads}`} mono />
-                    <DataRow label="Frequency" value={`${selected.cpu.freq_ghz} GHz`} mono />
-                  </div>
-                </SpecCard>
-
-                <SpecCard title="Memory" subtitle={`${selected.ram.total_gb} GB total`}>
-                  <div className="space-y-2.5">
-                    <Gauge label="Used" value={selected.ram.used_gb} max={selected.ram.total_gb} unit="GB" />
-                    <DataRow label="Used / Total" value={`${selected.ram.used_gb} / ${selected.ram.total_gb} GB`} mono />
-                    <DataRow label="Swap used" value={`${selected.ram.swap_used_gb} GB`} mono />
-                  </div>
-                </SpecCard>
-
-                {selected.gpu && (
-                  <SpecCard title="GPU" subtitle={selected.gpu.model} highlight>
-                    <div className="space-y-2.5">
-                      <Gauge label="Usage" value={selected.gpu.usage_pct} max={100} unit="%" />
-                      <DataRow label="CUDA cores" value={selected.gpu.cores_cuda} mono />
-                      <DataRow label="VRAM" value={`${selected.gpu.vram_gb} GB`} mono />
-                      <DataRow label="Temperature" value={`${selected.gpu.temp_c}°C`} mono
-                        valueColor={selected.gpu.temp_c > 70 ? 'var(--zp-busy)' : 'var(--zp-ink)'} />
-                    </div>
-                  </SpecCard>
-                )}
-                {!selected.gpu && (
-                  <SpecCard title="GPU" subtitle="No dedicated GPU">
-                    <div className="text-[12px] py-4 text-center" style={{ color: 'var(--zp-ink-3)' }}>
-                      This host doesn't run CV inference.
-                    </div>
-                  </SpecCard>
-                )}
-
-                <SpecCard title="Storage" subtitle={selected.storage.type}>
-                  <div className="space-y-2.5">
-                    <Gauge label="Used" value={selected.storage.used_gb} max={selected.storage.total_gb} unit="GB" />
-                    <DataRow label="Used / Total" value={`${selected.storage.used_gb} / ${selected.storage.total_gb} GB`} mono />
-                    <DataRow label="Type" value={selected.storage.type} small />
-                  </div>
-                </SpecCard>
+                <SpecCard title="CPU" subtitle={selected.cpuModel || 'Not specified'} />
+                <SpecCard title="Memory" subtitle={selected.ramGb ? `${selected.ramGb} GB RAM` : 'Not specified'} />
+                <SpecCard title="GPU" subtitle={selected.gpuModel || 'No dedicated GPU'} highlight={!!selected.gpuModel} />
+                <SpecCard title="Storage" subtitle={selected.storageGb ? `${selected.storageGb} GB` : 'Not specified'} />
               </div>
 
-              {/* Network */}
-              <Panel title="Network" subtitle="Connection health">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <NetTile label="Download" value={`${selected.network.down_mbps}`} unit="Mbps cap" />
-                  <NetTile label="Upload" value={`${selected.network.up_mbps}`} unit="Mbps cap" />
-                  <NetTile label="Current" value={`${selected.network.current_mbps}`} unit="Mbps now" />
-                  <NetTile label="Latency to Kgl" value={`${selected.network.latency_kgl_ms}`} unit="ms" tone={selected.network.latency_kgl_ms > 100 ? 'busy' : 'free'} />
-                </div>
-              </Panel>
-
-              {/* Services */}
-              <Panel title="Running Services" subtitle={`${selected.services.length} processes`}>
-                <div className="space-y-1.5">
-                  {selected.services.map(s => (
-                    <div key={s.name} className="flex items-center justify-between py-2 px-2.5 rounded-md"
-                      style={{ background: 'var(--zp-surface-2)' }}>
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.status === 'running' ? 'var(--zp-free)' : 'var(--zp-busy)' }}></span>
-                        <span className="font-mono text-[12px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{s.name}</span>
-                        {s.status !== 'running' && <Pill variant="warn">{s.status}</Pill>}
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>CPU: <span style={{ color: 'var(--zp-ink-2)' }}>{s.cpu_pct}%</span></span>
-                        <span className="font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>MEM: <span style={{ color: 'var(--zp-ink-2)' }}>{s.mem_mb}MB</span></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-
-              {/* Warnings */}
-              {selected.warnings && selected.warnings.length > 0 && (
-                <Panel title="Active Warnings" subtitle={`${selected.warnings.length} issues`}>
-                  <div className="space-y-2">
-                    {selected.warnings.map((w, i) => (
-                      <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-md" style={{ background: 'var(--zp-busy-soft)' }}>
-                        <span className="font-bold flex-shrink-0 mt-0.5" style={{ color: 'var(--zp-busy)' }}>⚠</span>
-                        <span className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>{w}</span>
-                      </div>
-                    ))}
+              {/* Live metrics — honest unavailable state */}
+              <Panel title="Live Metrics" subtitle="CPU · Memory · Temperature · Services">
+                <div className="flex flex-col items-center text-center py-8 px-6">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'var(--zp-surface-2)' }}>
+                    <Icons.Server size={22} style={{ color: 'var(--zp-ink-3)' }} />
                   </div>
-                </Panel>
-              )}
+                  <div className="text-[14px] font-semibold" style={{ color: 'var(--zp-ink)' }}>No live metrics yet</div>
+                  <p className="text-[12px] mt-1.5 max-w-md" style={{ color: 'var(--zp-ink-2)' }}>
+                    Real-time CPU, memory, GPU temperature, and running-service data appear here once a
+                    monitoring agent is installed on this machine and reporting to the backend.
+                  </p>
+                  <div className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1 rounded"
+                    style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-3)' }}>
+                    Awaiting monitoring agent
+                  </div>
+                </div>
+              </Panel>
 
-              {/* Actions */}
+              {/* Actions — need backend, honestly disabled */}
               <div className="flex gap-2 flex-wrap">
-                <button
-                  className="flex-1 min-w-[120px] px-3 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-                  style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
-                >
-                  Restart device
-                </button>
-                <button
-                  className="flex-1 min-w-[120px] px-3 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-                  style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
-                >
-                  View logs
-                </button>
-                <button
-                  className="flex-1 min-w-[120px] px-3 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-                  style={{ background: 'var(--zp-primary)', color: '#fff' }}
-                >
-                  SSH terminal →
-                </button>
+                <DisabledAction>Restart device</DisabledAction>
+                <DisabledAction>View logs</DisabledAction>
+                <DisabledAction>SSH terminal</DisabledAction>
               </div>
+              <p className="font-mono text-[10px]" style={{ color: 'var(--zp-ink-3)' }}>
+                Remote actions become available once the backend management service is connected.
+              </p>
             </>
           )}
         </div>
@@ -343,43 +246,113 @@ export default function EdgeDevicesView() {
   )
 }
 
-function SpecCard({ title, subtitle, children, highlight }) {
+/* ── Add / edit form ───────────────────────────────────────── */
+function DeviceForm({ mode, initial, onSave, onCancel }) {
+  const [f, setF] = useState({
+    name: initial?.name || '',
+    type: initial?.type || 'edge',
+    role: initial?.role || '',
+    location: initial?.location || '',
+    os: initial?.os || '',
+    cpuModel: initial?.cpuModel || '',
+    ramGb: initial?.ramGb ?? '',
+    gpuModel: initial?.gpuModel || '',
+    storageGb: initial?.storageGb ?? '',
+  })
+  const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
+  const inputStyle = { background: 'var(--zp-surface)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }
+  const labelCls = 'font-mono text-[10px] uppercase tracking-[0.14em]'
+
   return (
-    <div className="zp-card p-4" style={{ borderColor: highlight ? 'var(--zp-accent-soft)' : 'var(--zp-line)', boxShadow: highlight ? '0 0 0 1px var(--zp-accent-soft)' : 'var(--zp-shadow-1)' }}>
-      <div className="flex items-baseline justify-between mb-3">
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] font-semibold" style={{ color: highlight ? 'var(--zp-accent-ink)' : 'var(--zp-ink-3)' }}>{title}</div>
+    <div className="px-5 py-4" style={{ background: 'var(--zp-primary-soft)', borderBottom: '1px solid var(--zp-line)' }}>
+      <Eyebrow>{mode === 'add' ? 'Add a device' : `Edit \u00b7 ${initial.name}`}</Eyebrow>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
+        <div className="md:col-span-7">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Name</label>
+          <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Edge Device · North"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-5">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Type</label>
+          <select value={f.type} onChange={e => set('type', e.target.value)}
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle}>
+            <option value="vps">Cloud VPS</option>
+            <option value="edge">Edge Device</option>
+            <option value="tablet">Gate Tablet</option>
+          </select>
+        </div>
+        <div className="md:col-span-12">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Role / purpose</label>
+          <input value={f.role} onChange={e => set('role', e.target.value)} placeholder="e.g. YOLOv8 inference for North & VIP cameras"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Location</label>
+          <input value={f.location} onChange={e => set('location', e.target.value)} placeholder="e.g. Amahoro Stadium · Server room A"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Operating system</label>
+          <input value={f.os} onChange={e => set('os', e.target.value)} placeholder="e.g. Ubuntu 24.04 LTS"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>CPU model</label>
+          <input value={f.cpuModel} onChange={e => set('cpuModel', e.target.value)} placeholder="e.g. NVIDIA ARM Cortex-A78AE"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>GPU model (optional)</label>
+          <input value={f.gpuModel} onChange={e => set('gpuModel', e.target.value)} placeholder="e.g. NVIDIA Jetson Orin Nano"
+            className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>RAM (GB)</label>
+          <input value={f.ramGb} onChange={e => set('ramGb', e.target.value.replace(/[^0-9]/g, ''))} placeholder="e.g. 8"
+            className="w-full mt-1 px-3 py-2 text-[13px] font-mono rounded-md outline-none" style={inputStyle} />
+        </div>
+        <div className="md:col-span-6">
+          <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Storage (GB)</label>
+          <input value={f.storageGb} onChange={e => set('storageGb', e.target.value.replace(/[^0-9]/g, ''))} placeholder="e.g. 256"
+            className="w-full mt-1 px-3 py-2 text-[13px] font-mono rounded-md outline-none" style={inputStyle} />
+        </div>
       </div>
-      <div className="font-mono text-[11px] mb-3" style={{ color: 'var(--zp-ink-2)' }}>{subtitle}</div>
+      <div className="flex justify-end gap-2 mt-3">
+        <button onClick={onCancel}
+          className="px-4 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+          style={{ background: 'var(--zp-surface)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}>
+          Cancel
+        </button>
+        <button
+          onClick={() => { if (!f.name.trim()) { alert('Name is required'); return } onSave(f) }}
+          className="px-4 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
+          style={{ background: 'var(--zp-primary)', color: '#fff' }}>
+          {mode === 'add' ? 'Add device' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SpecCard({ title, subtitle, highlight }) {
+  return (
+    <div className="zp-card p-4"
+      style={{ borderColor: highlight ? 'var(--zp-accent-soft)' : 'var(--zp-line)', boxShadow: highlight ? '0 0 0 1px var(--zp-accent-soft)' : 'var(--zp-shadow-1)' }}>
+      <div className="font-mono text-[10px] uppercase tracking-[0.18em] font-semibold mb-2" style={{ color: highlight ? 'var(--zp-accent-ink)' : 'var(--zp-ink-3)' }}>{title}</div>
+      <div className="text-[13px]" style={{ color: 'var(--zp-ink)' }}>{subtitle}</div>
+    </div>
+  )
+}
+
+function DisabledAction({ children }) {
+  return (
+    <button
+      disabled
+      title="Available once the backend is connected"
+      className="flex-1 min-w-[120px] px-3 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+      style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-3)', border: '1px solid var(--zp-line)', cursor: 'not-allowed', opacity: 0.6 }}
+    >
       {children}
-    </div>
-  )
-}
-
-function Gauge({ label, value, max, unit }) {
-  const pct = Math.min(100, (value / max) * 100)
-  const color = pct > 80 ? 'var(--zp-busy)' : pct > 60 ? 'var(--zp-info)' : 'var(--zp-free)'
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>{label}</span>
-        <span className="font-mono text-[12px] font-bold" style={{ color }}>{Math.round(pct)}{unit === '%' ? '%' : ''}</span>
-      </div>
-      <div className="zp-bar"><i style={{ width: `${pct}%`, background: color }} /></div>
-    </div>
-  )
-}
-
-function NetTile({ label, value, unit, tone = 'info' }) {
-  const colorMap = {
-    free: 'var(--zp-free)',
-    info: 'var(--zp-ink)',
-    busy: 'var(--zp-busy)',
-  }
-  return (
-    <div className="rounded-md p-3" style={{ border: '1px solid var(--zp-line)' }}>
-      <div className="font-mono text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--zp-ink-3)' }}>{label}</div>
-      <div className="font-mono text-lg font-bold mt-1 leading-none" style={{ color: colorMap[tone] }}>{value}</div>
-      <div className="font-mono text-[10px] mt-1" style={{ color: 'var(--zp-ink-3)' }}>{unit}</div>
-    </div>
+    </button>
   )
 }
