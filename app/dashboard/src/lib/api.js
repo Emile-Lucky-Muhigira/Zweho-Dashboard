@@ -108,12 +108,22 @@ export async function getRevenue({ grain = 'day' } = {}) {
 // ============================================================
 export async function getAnalytics() {
   if (isDemoMode()) {
-    return { hourly: makeHourlyOccupancy(), heatmap: makeHeatmap() }
+    return {
+      hourly: makeHourlyOccupancy(),
+      heatmap: makeHeatmap(),
+      kpis: {
+        peakOccupancy: 94,
+        peakOccupancyAt: 'Tue 18:00',
+        avgStayHours: 2.4,
+        avgDailyBookings: 42,
+        cvAccuracy: 96.8,
+      },
+    }
   }
   return safe(async () => {
     const { data } = await api.get('/admin/analytics')
     return data
-  }, { hourly: [], heatmap: [] })
+  }, { hourly: [], heatmap: [], kpis: null })
 }
 
 // ============================================================
@@ -127,6 +137,27 @@ export async function validateQR(qrCode) {
     const { data } = await api.post('/qr/validate', { qr: qrCode })
     return data
   }, { valid: false, reason: 'Backend not connected' })
+}
+
+// ============================================================
+// SCAN HISTORY  ·  GET /qr/scans
+// Every gate scan logged by the scanner app.
+// ============================================================
+export async function getScanHistory() {
+  if (isDemoMode()) {
+    return [
+      { id: 'BK-2841', valid: true,  time: '14:22:54', date: 'Today', gate: 'North', plate: 'RAB 472 G', spot: 'A-14', operator: 'Daniel K.' },
+      { id: 'BK-2839', valid: true,  time: '14:21:30', date: 'Today', gate: 'South', plate: 'RAC 118 K', spot: 'D-31', operator: 'Aimable N.' },
+      { id: 'BK-2838', valid: false, time: '14:19:12', date: 'Today', gate: 'North', plate: 'RAD 905 B', spot: '—', operator: 'Daniel K.', reason: 'Already used' },
+      { id: 'BK-2836', valid: true,  time: '14:18:01', date: 'Today', gate: 'North', plate: 'RAE 224 M', spot: 'A-09', operator: 'Daniel K.' },
+      { id: 'BK-2830', valid: true,  time: '14:12:20', date: 'Today', gate: 'North', plate: 'RAG 338 T', spot: 'A-22', operator: 'Daniel K.' },
+      { id: 'BK-2102', valid: true,  time: '19:48:30', date: 'Yesterday', gate: 'North', plate: 'RAK 887 D', spot: 'A-41', operator: 'Daniel K.' },
+    ]
+  }
+  return safe(async () => {
+    const { data } = await api.get('/qr/scans')
+    return data
+  }, [])
 }
 
 // ============================================================

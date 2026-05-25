@@ -2,30 +2,38 @@ import React, { useState } from 'react'
 import { Panel, Pill, Eyebrow } from '../components/ui'
 import { useToast } from '../lib/toast'
 import { Icons } from '../components/Icons'
+import { useDemoMode } from '../lib/demoMode'
 
-// In production these arrive from the standalone scanner app via
-// the backend. The dashboard only DISPLAYS them — it doesn't scan.
+// Sample tickets — used ONLY when Demo Mode is ON, for previews.
 const SAMPLE_QUEUE = [
-  { id: 'BK-2841', valid: true,  plate: 'RAB 472 G', zone: 'A', spot: 'A-14', zoneName: 'North Gate', paid: true,  name: 'Visitor', time: '14:22:54' },
-  { id: 'BK-2839', valid: true,  plate: 'RAC 118 K', zone: 'D', spot: 'D-31', zoneName: 'South Gate', paid: true,  name: 'Visitor', time: '14:21:30' },
-  { id: 'BK-2838', valid: false, plate: 'RAD 905 B', zone: '—', spot: '—',    zoneName: '—',          paid: false, name: 'Visitor', time: '14:19:12', reason: 'Ticket already used at 14:05' },
+  { id: 'BK-2841', valid: true,  plate: 'RAB 472 G', zone: 'A', spot: 'A-14', zoneName: 'North Gate', paid: true,  time: '14:22:54' },
+  { id: 'BK-2839', valid: true,  plate: 'RAC 118 K', zone: 'D', spot: 'D-31', zoneName: 'South Gate', paid: true,  time: '14:21:30' },
+  { id: 'BK-2838', valid: false, plate: 'RAD 905 B', zone: '—', spot: '—',    zoneName: '—',          paid: false, time: '14:19:12', reason: 'Ticket already used at 14:05' },
 ]
 
 export default function ScannerView() {
   const toast = useToast()
-  const [queueIndex, setQueueIndex] = useState(0)
-  const [current, setCurrent] = useState(SAMPLE_QUEUE[0])
+  const { demoMode } = useDemoMode()
 
-  const nextVisitor = () => {
-    const next = (queueIndex + 1) % SAMPLE_QUEUE.length
-    setQueueIndex(next)
+  // current = the scanned ticket on display. null = waiting.
+  const [current, setCurrent] = useState(null)
+  const [queueIndex, setQueueIndex] = useState(0)
+
+  // Demo-only: cycle through sample tickets.
+  const demoNext = () => {
+    const next = (queueIndex) % SAMPLE_QUEUE.length
+    setQueueIndex(next + 1)
     setCurrent(SAMPLE_QUEUE[next])
+  }
+
+  const clearTicket = () => {
+    setCurrent(null)
     toast.info('Ready', 'Waiting for next scan')
   }
 
   return (
     <div className="space-y-5 fade-in">
-      {/* Context banner — explains this page's real-world role */}
+      {/* Context banner */}
       <div className="zp-card px-5 py-3 flex items-center gap-3 flex-wrap">
         <span className="w-1.5 h-1.5 rounded-full zp-pulse-dot" style={{ background: 'var(--zp-free)' }}></span>
         <span className="text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
@@ -34,12 +42,12 @@ export default function ScannerView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5">
-        {/* LEFT — camera viewport + manual lookup */}
+        {/* LEFT — scanner feed + manual lookup */}
         <div className="lg:col-span-6 space-y-4">
           <Panel
             title="Gate Scanner · North Gate"
             subtitle="Live feed from scanner app"
-            action={<Pill variant="success">Connected</Pill>}
+            action={<Pill variant={demoMode ? 'success' : 'default'}>{demoMode ? 'Connected' : 'Awaiting backend'}</Pill>}
           >
             <div className="zp-map-surface relative aspect-video rounded-md overflow-hidden">
               <div className="absolute inset-0 flex items-center justify-center">
@@ -48,20 +56,10 @@ export default function ScannerView() {
                   <div className="absolute top-0 right-0 w-12 h-12" style={{ borderTop: '2px solid var(--zp-accent)', borderRight: '2px solid var(--zp-accent)' }}></div>
                   <div className="absolute bottom-0 left-0 w-12 h-12" style={{ borderBottom: '2px solid var(--zp-accent)', borderLeft: '2px solid var(--zp-accent)' }}></div>
                   <div className="absolute bottom-0 right-0 w-12 h-12" style={{ borderBottom: '2px solid var(--zp-accent)', borderRight: '2px solid var(--zp-accent)' }}></div>
-                  <div
-                    className="absolute left-0 right-0"
-                    style={{ height: 2, top: '50%', background: 'linear-gradient(90deg, transparent, var(--zp-accent), transparent)', boxShadow: '0 0 18px var(--zp-accent)' }}
-                  ></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="font-mono text-[11px] uppercase tracking-[0.2em] font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>Scanner feed</div>
-                    </div>
+                    <div className="font-mono text-[11px] uppercase tracking-[0.2em] font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>Scanner feed</div>
                   </div>
                 </div>
-              </div>
-              <div className="absolute top-4 left-4 font-mono text-[11px] uppercase tracking-[0.18em] flex items-center gap-2 font-semibold" style={{ color: 'var(--zp-free)' }}>
-                <span className="w-1.5 h-1.5 rounded-full blink" style={{ background: 'var(--zp-free)' }}></span>
-                Live
               </div>
               <div className="absolute bottom-4 left-4 right-4 font-mono text-[10px] uppercase tracking-[0.16em] font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
                 Operator scans with the handheld app — results appear here
@@ -77,7 +75,7 @@ export default function ScannerView() {
                 style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
               />
               <button
-                onClick={() => toast.info('Lookup', 'Connects to backend when live')}
+                onClick={() => toast.info('Lookup', 'Connects to the backend when live')}
                 className="px-4 py-2.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
                 style={{ background: 'var(--zp-primary)', color: '#fff' }}
               >
@@ -87,51 +85,70 @@ export default function ScannerView() {
             <div className="mt-2.5 font-mono text-[11px] leading-relaxed" style={{ color: 'var(--zp-ink-3)' }}>
               Use only if the QR code is damaged or unreadable. All manual entries are logged with the operator's ID.
             </div>
-            <div className="mt-3 pt-3 flex gap-2" style={{ borderTop: '1px solid var(--zp-line)' }}>
-              <button
-                onClick={() => { setCurrent(SAMPLE_QUEUE[0]); toast.success('Granted', SAMPLE_QUEUE[0].id) }}
-                className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-                style={{ background: 'var(--zp-free-soft)', color: 'var(--zp-free)', border: '1px solid color-mix(in srgb, var(--zp-free) 30%, transparent)' }}
-              >
-                Test valid scan
-              </button>
-              <button
-                onClick={() => { setCurrent(SAMPLE_QUEUE[2]); toast.error('Denied', SAMPLE_QUEUE[2].reason) }}
-                className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
-                style={{ background: 'var(--zp-full-soft)', color: 'var(--zp-full)', border: '1px solid color-mix(in srgb, var(--zp-full) 30%, transparent)' }}
-              >
-                Test invalid scan
-              </button>
-            </div>
+
+            {/* Test buttons — Demo Mode only */}
+            {demoMode && (
+              <div className="mt-3 pt-3 flex gap-2" style={{ borderTop: '1px solid var(--zp-line)' }}>
+                <span className="font-mono text-[9px] uppercase tracking-[0.14em] self-center" style={{ color: 'var(--zp-ink-3)' }}>Demo</span>
+                <button
+                  onClick={() => { setCurrent(SAMPLE_QUEUE[0]) }}
+                  className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+                  style={{ background: 'var(--zp-free-soft)', color: 'var(--zp-free)', border: '1px solid color-mix(in srgb, var(--zp-free) 30%, transparent)' }}
+                >
+                  Test valid scan
+                </button>
+                <button
+                  onClick={() => { setCurrent(SAMPLE_QUEUE[2]) }}
+                  className="flex-1 px-3 py-2 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
+                  style={{ background: 'var(--zp-full-soft)', color: 'var(--zp-full)', border: '1px solid color-mix(in srgb, var(--zp-full) 30%, transparent)' }}
+                >
+                  Test invalid scan
+                </button>
+              </div>
+            )}
           </Panel>
         </div>
 
-        {/* RIGHT — scanned ticket details */}
+        {/* RIGHT — scanned ticket / waiting */}
         <div className="lg:col-span-6">
-          <TicketPanel ticket={current} onNext={nextVisitor} />
+          {current
+            ? <TicketPanel ticket={current} onNext={demoMode ? demoNext : clearTicket} demoMode={demoMode} />
+            : <WaitingPanel demoMode={demoMode} />}
         </div>
       </div>
     </div>
   )
 }
 
-function TicketPanel({ ticket, onNext }) {
-  const valid = ticket.valid
-
+/* ── Waiting state — real, no scan yet ─────────────────────── */
+function WaitingPanel({ demoMode }) {
   return (
-    <div
-      className="rounded-md overflow-hidden"
-      style={{ border: '2px solid ' + (valid ? 'var(--zp-free)' : 'var(--zp-full)') }}
-    >
-      {/* Result header */}
-      <div
-        className="px-5 py-4 flex items-center gap-4"
-        style={{ background: valid ? 'var(--zp-free-soft)' : 'var(--zp-full-soft)' }}
-      >
-        <div
-          className="w-14 h-14 rounded-md flex items-center justify-center flex-shrink-0"
-          style={{ background: valid ? 'var(--zp-free)' : 'var(--zp-full)', color: '#fff' }}
-        >
+    <div className="zp-card h-full flex flex-col items-center justify-center py-16 px-6 text-center">
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: 'var(--zp-surface-2)' }}>
+        <Icons.QrCode size={28} style={{ color: 'var(--zp-ink-3)' }} />
+      </div>
+      <div className="font-display text-xl" style={{ color: 'var(--zp-ink)' }}>Waiting for next scan</div>
+      <p className="text-[12px] mt-2 max-w-xs" style={{ color: 'var(--zp-ink-2)' }}>
+        {demoMode
+          ? 'Demo mode is on. Use the test buttons under Manual Lookup to preview a scan.'
+          : 'When the gate operator scans a ticket with the scanner app, the visitor\u2019s details will appear here automatically.'}
+      </p>
+      <div className="mt-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em]" style={{ color: 'var(--zp-ink-3)' }}>
+        <span className="w-1.5 h-1.5 rounded-full blink" style={{ background: demoMode ? 'var(--zp-free)' : 'var(--zp-ink-3)' }}></span>
+        {demoMode ? 'Listening (demo)' : 'Listening for scans'}
+      </div>
+    </div>
+  )
+}
+
+/* ── Scanned ticket ────────────────────────────────────────── */
+function TicketPanel({ ticket, onNext, demoMode }) {
+  const valid = ticket.valid
+  return (
+    <div className="rounded-md overflow-hidden" style={{ border: '2px solid ' + (valid ? 'var(--zp-free)' : 'var(--zp-full)') }}>
+      <div className="px-5 py-4 flex items-center gap-4" style={{ background: valid ? 'var(--zp-free-soft)' : 'var(--zp-full-soft)' }}>
+        <div className="w-14 h-14 rounded-md flex items-center justify-center flex-shrink-0"
+          style={{ background: valid ? 'var(--zp-free)' : 'var(--zp-full)', color: '#fff' }}>
           <span className="text-3xl">{valid ? '✓' : '✗'}</span>
         </div>
         <div>
@@ -144,27 +161,18 @@ function TicketPanel({ ticket, onNext }) {
         </div>
       </div>
 
-      {/* Body */}
       <div className="p-5" style={{ background: 'var(--zp-surface)' }}>
         {valid ? (
           <>
-            {/* Welcome message */}
             <div className="text-center py-2">
               <div className="font-display text-2xl" style={{ color: 'var(--zp-ink)' }}>Welcome to Amahoro</div>
               <div className="text-[13px] mt-1" style={{ color: 'var(--zp-ink-2)' }}>Please direct this vehicle to their reserved slot.</div>
             </div>
-
-            {/* Direction — the big actionable info */}
-            <div
-              className="mt-4 rounded-md p-4 text-center"
-              style={{ background: 'var(--zp-primary-soft)' }}
-            >
+            <div className="mt-4 rounded-md p-4 text-center" style={{ background: 'var(--zp-primary-soft)' }}>
               <Eyebrow>Direct visitor to</Eyebrow>
               <div className="font-mono text-4xl font-bold mt-1" style={{ color: 'var(--zp-primary)' }}>{ticket.spot}</div>
               <div className="text-[13px] mt-1" style={{ color: 'var(--zp-ink-2)' }}>Zone {ticket.zone} · {ticket.zoneName}</div>
             </div>
-
-            {/* Details */}
             <div className="mt-4 grid grid-cols-2 gap-3">
               <DetailTile label="Plate number" value={ticket.plate} />
               <DetailTile label="Payment" value={ticket.paid ? 'Paid' : 'Not paid'} tone={ticket.paid ? 'free' : 'full'} />
@@ -185,13 +193,12 @@ function TicketPanel({ ticket, onNext }) {
           </>
         )}
 
-        {/* Next visitor */}
         <button
           onClick={onNext}
           className="w-full mt-5 py-3 text-[13px] font-mono uppercase tracking-[0.16em] rounded-md font-bold flex items-center justify-center gap-2"
           style={{ background: 'var(--zp-primary)', color: '#fff' }}
         >
-          Next visitor
+          {demoMode ? 'Next visitor (demo)' : 'Next visitor'}
           <Icons.ChevronRight size={16} />
         </button>
       </div>

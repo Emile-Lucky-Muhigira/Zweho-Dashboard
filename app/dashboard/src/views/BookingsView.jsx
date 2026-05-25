@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBookings, exportBookingsCSV } from '../lib/api'
+import { getBookings, exportBookingsCSV, isOffline } from '../lib/api'
 import { Panel, MetricCard, Pill, DataRow, maskPhone, Eyebrow } from '../components/ui'
 import { useToast } from '../lib/toast'
 import { Icons } from '../components/Icons'
@@ -15,6 +15,34 @@ export default function BookingsView() {
     queryKey: ['bookings', filter, search],
     queryFn: () => getBookings({ status: filter, search }),
   })
+
+  // All bookings (unfiltered) — for the KPI cards.
+  const { data: allBookings = [] } = useQuery({
+    queryKey: ['bookings-all'],
+    queryFn: () => getBookings({ status: 'all', search: '' }),
+  })
+
+  const offline = isOffline(allBookings)
+
+  // ── KPIs computed from REAL data ──────────────────────────
+  const kpis = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const isToday = (b) => (b.createdAt || '').slice(0, 10) === today
+
+    const todays = allBookings.filter(isToday)
+    const pending = allBookings.filter(b => b.status === 'pending')
+    const active = allBookings.filter(b => b.status === 'paid' || b.status === 'used')
+    const todayRevenue = todays
+      .filter(b => b.status === 'paid' || b.status === 'used')
+      .reduce((sum, b) => sum + (b.amount || 0), 0)
+
+    return {
+      today: todays.length,
+      pending: pending.length,
+      active: active.length,
+      revenue: todayRevenue,
+    }
+  }, [allBookings])
 
   const handleExport = async () => {
     try {
@@ -31,12 +59,12 @@ export default function BookingsView() {
 
   return (
     <div className="space-y-5 fade-in">
-      {/* KPI strip */}
+      {/* KPI strip — computed from real bookings */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <MetricCard label="Today's Bookings" value="47" delta="+12% vs yest" tone="free" />
-        <MetricCard label="Pending Payment" value="3" unit="awaiting MoMo" tone="busy" />
-        <MetricCard label="Active Now" value="28" unit="in-park" tone="info" />
-        <MetricCard label="Today's Revenue" value="84,500" unit="RWF" tone="free" />
+        <MetricCard label="Today's Bookings" value={kpis.today} tone="info" />
+        <MetricCard label="Pending Payment" value={kpis.pending} unit="awaiting MoMo" tone={kpis.pending > 0 ? 'busy' : 'free'} />
+        <MetricCard label="Active Now" value={kpis.active} unit="in-park" tone="info" />
+        <MetricCard label="Today's Revenue" value={kpis.revenue.toLocaleString()} unit="RWF" tone="free" />
       </div>
 
       <Panel
@@ -115,6 +143,20 @@ export default function BookingsView() {
               </tr>
             </thead>
             <tbody>
+              {bookings.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-12 text-center">
+                    <div className="text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>
+                      {offline ? 'No bookings to show' : 'No bookings match this filter'}
+                    </div>
+                    <p className="text-[12px] mt-1 max-w-md mx-auto" style={{ color: 'var(--zp-ink-2)' }}>
+                      {offline
+                        ? 'Bookings made by visitors in the mobile app will appear here in real time once the backend is connected.'
+                        : 'Try a different filter or clear your search.'}
+                    </p>
+                  </td>
+                </tr>
+              )}
               {bookings.map(b => (
                 <React.Fragment key={b.id}>
                   <tr
@@ -135,7 +177,7 @@ export default function BookingsView() {
                     </td>
                     <td className="px-5 py-3 text-[13px] font-mono" style={{ color: 'var(--zp-ink-2)' }}>{b.duration}</td>
                     <td className="px-5 py-3 text-right font-mono text-[13px] font-semibold tabular-nums" style={{ color: 'var(--zp-ink)' }}>
-                      {b.amount.toLocaleString()} <span className="text-[10px] font-normal" style={{ color: 'var(--zp-ink-3)' }}>RWF</span>
+                      {(b.amount || 0).toLocaleString()} <span className="text-[10px] font-normal" style={{ color: 'var(--zp-ink-3)' }}>RWF</span>
                     </td>
                     <td className="px-5 py-3">
                       <Pill variant={b.status === 'paid' ? 'success' : b.status === 'used' ? 'info' : b.status === 'pending' ? 'warn' : b.status === 'expired' ? 'danger' : 'default'}>
@@ -144,7 +186,7 @@ export default function BookingsView() {
                     </td>
                     <td className="px-5 py-3 font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>{b.momoTx || '—'}</td>
                     <td className="px-5 py-3 text-right font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>
-                      {Math.floor((Date.now() - new Date(b.createdAt).getTime()) / 3600000)}h ago
+                      {b.createdAt ? `${Math.floor((Date.now() - new Date(b.createdAt).getTime()) / 3600000)}h ago` : '—'}
                     </td>
                     <td className="px-5 py-3 text-center" style={{ color: 'var(--zp-ink-3)' }}>
                       {expanded === b.id ? '▴' : '▾'}
@@ -162,7 +204,7 @@ export default function BookingsView() {
                                   <span className="w-2 h-2 rounded-full" style={{ background: 'var(--zp-free)' }}></span>
                                   <span style={{ color: 'var(--zp-ink)' }}>{step}</span>
                                   <span className="font-mono text-[10px] ml-auto" style={{ color: 'var(--zp-ink-3)' }}>
-                                    {new Date(new Date(b.createdAt).getTime() + idx * 60000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                    {b.createdAt ? new Date(new Date(b.createdAt).getTime() + idx * 60000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
                                   </span>
                                 </div>
                               ))}
@@ -171,9 +213,9 @@ export default function BookingsView() {
                           <div>
                             <Eyebrow>Customer</Eyebrow>
                             <div className="space-y-1 mt-3">
-                              <DataRow label="Phone (full)" value={b.phone} mono />
-                              <DataRow label="App version" value="v1.2.3 · Android" mono small />
-                              <DataRow label="Previous bookings" value="7" mono />
+                              <DataRow label="Phone (full)" value={b.phone || '—'} mono />
+                              <DataRow label="App version" value={b.appVersion || '—'} mono small />
+                              <DataRow label="Previous bookings" value={b.previousBookings ?? '—'} mono />
                             </div>
                           </div>
                           <div>

@@ -51,4 +51,5 @@ export const STORAGE_KEYS = {
   zones:  'zweho_zones',
   events: 'zweho_events',
   staff:  'zweho_staff',
+  cameras: 'zweho_cameras',
 }

@@ -1,7 +1,7 @@
 // src/views/AnnotationView.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Panel, Pill } from '../components/ui'
-import { ZONES } from '../lib/constants'
+import { useZones } from '../lib/zonesStore'
 import { useToast } from '../lib/toast'
 
 export default function AnnotationView() {
@@ -10,6 +10,9 @@ export default function AnnotationView() {
   const fileInputRef = useRef(null)
   const importInputRef = useRef(null)
   const toast = useToast()
+  const { activeZones } = useZones()
+  // Live admin-managed zones. Fall back to empty list if none.
+  const ZONES = activeZones
 
   const [image, setImage] = useState(null)
   const [imageInfo, setImageInfo] = useState({ name: 'No image loaded', width: 0, height: 0 })
@@ -199,6 +202,14 @@ export default function AnnotationView() {
   }, [image, polygons, currentPoints, hoverPoint, zoom, pan, selectedPolygonId, showLabels])
 
   useEffect(() => { draw() }, [draw])
+
+  // Keep selectedZone valid as admin-managed zones change.
+  useEffect(() => {
+    if (ZONES.length === 0) return
+    if (!ZONES.some(z => z.id === selectedZone)) {
+      setSelectedZone(ZONES[0].id)
+    }
+  }, [ZONES, selectedZone])
 
   useEffect(() => {
     const resize = () => {
