@@ -1,9 +1,51 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getBookings, exportBookingsCSV, isOffline } from '../lib/api'
-import { Panel, MetricCard, Pill, DataRow, maskPhone, Eyebrow } from '../components/ui'
+import { Panel, MetricCard, Pill, DataRow, Eyebrow } from '../components/ui'
 import { useToast } from '../lib/toast'
 import { Icons } from '../components/Icons'
+
+// Mask phone "+250788..." → "+250 7XX XXX 193" — safe even if input is missing.
+function maskPhoneSafe(phone) {
+  if (!phone || typeof phone !== 'string') return '—'
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 4) return phone
+  const last3 = digits.slice(-3)
+  return phone.slice(0, phone.length - 6).replace(/\d/g, 'X') + ' XXX ' + last3
+}
+
+// Map Bruno's uppercase enum → our lowercase shape.
+function normalizeBooking(b) {
+  if (!b) return null
+  const phone = b.user?.phone ?? b.phone ?? b.user_phone ?? ''
+  const userName = b.user?.full_name ?? b.user?.name ?? ''
+  const status = (b.status || 'pending').toString().toLowerCase()
+  return {
+    id: b.ref || b.id,                                  // short ref for display
+    uuid: b.id,                                         // UUID for backend ops
+    phone,
+    userName,
+    spot: b.spot_label || b.slot?.label || b.slot_id || '—',
+    zone: b.zone_id || b.slot?.zone_id || '—',
+    duration: b.duration || b.arrival_to && b.arrival_from
+      ? formatDuration(b.arrival_from, b.arrival_to) : '—',
+    amount: b.amount_rwf ?? b.amount ?? 0,
+    status,
+    momoTx: b.payment?.momo_tx_id ?? b.momo_tx_id ?? null,
+    createdAt: b.created_at || b.createdAt || null,
+    plate: b.license_plate || b.vehicle_plate || '',
+    eventTitle: b.event?.title || b.event_title || '',
+    raw: b,
+  }
+}
+
+function formatDuration(from, to) {
+  try {
+    const minutes = Math.round((new Date(to) - new Date(from)) / 60000)
+    if (minutes < 60) return `${minutes}m`
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  } catch { return '—' }
+}
 
 export default function BookingsView() {
   const [filter, setFilter] = useState('all')
@@ -11,18 +53,30 @@ export default function BookingsView() {
   const [expanded, setExpanded] = useState(null)
   const toast = useToast()
 
-  const { data: bookings = [] } = useQuery({
-    queryKey: ['bookings', filter, search],
-    queryFn: () => getBookings({ status: filter, search }),
+  const { data: rawBookings = [] } = useQuery({
+    queryKey: ['bookings', filter],
+    queryFn: () => getBookings({ status: filter === 'all' ? undefined : filter.toUpperCase() }),
   })
 
-  // All bookings (unfiltered) — for the KPI cards.
-  const { data: allBookings = [] } = useQuery({
+  // Normalise once; search is client-side (Bruno's API doesn't accept search yet).
+  const bookings = useMemo(() => {
+    const normalised = rawBookings.map(normalizeBooking).filter(Boolean)
+    if (!search) return normalised
+    const q = search.toLowerCase()
+    return normalised.filter(b =>
+      (b.id || '').toLowerCase().includes(q) ||
+      (b.phone || '').toLowerCase().includes(q) ||
+      (b.plate || '').toLowerCase().includes(q)
+    )
+  }, [rawBookings, search])
+
+  const { data: rawAll = [] } = useQuery({
     queryKey: ['bookings-all'],
-    queryFn: () => getBookings({ status: 'all', search: '' }),
+    queryFn: () => getBookings(),
   })
+  const allBookings = useMemo(() => rawAll.map(normalizeBooking).filter(Boolean), [rawAll])
 
-  const offline = isOffline(allBookings)
+  const offline = isOffline(rawAll)
 
   // ── KPIs computed from REAL data ──────────────────────────
   const kpis = useMemo(() => {
@@ -31,9 +85,9 @@ export default function BookingsView() {
 
     const todays = allBookings.filter(isToday)
     const pending = allBookings.filter(b => b.status === 'pending')
-    const active = allBookings.filter(b => b.status === 'paid' || b.status === 'used')
+    const active = allBookings.filter(b => b.status === 'paid' || b.status === 'active')
     const todayRevenue = todays
-      .filter(b => b.status === 'paid' || b.status === 'used')
+      .filter(b => ['paid', 'used', 'active'].includes(b.status))
       .reduce((sum, b) => sum + (b.amount || 0), 0)
 
     return {
@@ -46,20 +100,20 @@ export default function BookingsView() {
 
   const handleExport = async () => {
     try {
-      const url = await exportBookingsCSV({ status: filter, search })
+      const url = await exportBookingsCSV({ status: filter === 'all' ? undefined : filter.toUpperCase() })
       const a = document.createElement('a')
       a.href = url
       a.download = `zweho-bookings-${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
       toast.success('Export complete', `${bookings.length} bookings downloaded`)
     } catch (err) {
-      toast.error('Export failed', err.message || 'Try again or contact support')
+      toast.error('Export failed', err.message || 'Try again')
     }
   }
 
   return (
     <div className="space-y-5 fade-in">
-      {/* KPI strip — computed from real bookings */}
+      {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <MetricCard label="Today's Bookings" value={kpis.today} tone="info" />
         <MetricCard label="Pending Payment" value={kpis.pending} unit="awaiting MoMo" tone={kpis.pending > 0 ? 'busy' : 'free'} />
@@ -81,7 +135,7 @@ export default function BookingsView() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search ID or phone…"
+                placeholder="Search ref, phone, plate…"
                 className="bg-transparent text-[13px] font-mono w-48 outline-none"
                 style={{ color: 'var(--zp-ink)' }}
               />
@@ -96,12 +150,12 @@ export default function BookingsView() {
           </div>
         }
       >
-        {/* Filter chips */}
+        {/* Filter chips — Bruno's enums: PENDING, PAID, ACTIVE, USED, CANCELLED, REFUNDED, NO_SHOW */}
         <div
           className="flex items-center gap-1 px-5 py-3 flex-wrap"
           style={{ borderBottom: '1px solid var(--zp-line)', background: 'var(--zp-surface-2)' }}
         >
-          {['all', 'paid', 'used', 'pending', 'cancelled', 'expired'].map(f => (
+          {['all', 'pending', 'paid', 'active', 'used', 'cancelled', 'refunded', 'no_show'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -111,7 +165,7 @@ export default function BookingsView() {
                 color: filter === f ? 'var(--zp-primary)' : 'var(--zp-ink-2)',
               }}
             >
-              {f}
+              {f.replace('_', ' ')}
               {filter === f && (
                 <span className="ml-1.5 font-normal" style={{ color: 'var(--zp-primary)', opacity: 0.6 }}>
                   {bookings.length}
@@ -134,7 +188,7 @@ export default function BookingsView() {
                 <th className="text-left px-5 py-3 font-semibold">Booking</th>
                 <th className="text-left px-5 py-3 font-semibold">Customer</th>
                 <th className="text-left px-5 py-3 font-semibold">Zone · Spot</th>
-                <th className="text-left px-5 py-3 font-semibold">Duration</th>
+                <th className="text-left px-5 py-3 font-semibold">Plate</th>
                 <th className="text-right px-5 py-3 font-semibold">Amount</th>
                 <th className="text-left px-5 py-3 font-semibold">Status</th>
                 <th className="text-left px-5 py-3 font-semibold">MoMo Tx</th>
@@ -147,83 +201,79 @@ export default function BookingsView() {
                 <tr>
                   <td colSpan={9} className="px-5 py-12 text-center">
                     <div className="text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>
-                      {offline ? 'No bookings to show' : 'No bookings match this filter'}
+                      {offline ? 'Could not load bookings' : 'No bookings match this filter'}
                     </div>
                     <p className="text-[12px] mt-1 max-w-md mx-auto" style={{ color: 'var(--zp-ink-2)' }}>
                       {offline
-                        ? 'Bookings made by visitors in the mobile app will appear here in real time once the backend is connected.'
+                        ? 'Backend unreachable. Bookings made by visitors will appear here in real time once the backend is connected.'
                         : 'Try a different filter or clear your search.'}
                     </p>
                   </td>
                 </tr>
               )}
               {bookings.map(b => (
-                <React.Fragment key={b.id}>
+                <React.Fragment key={b.uuid || b.id}>
                   <tr
-                    onClick={() => setExpanded(expanded === b.id ? null : b.id)}
+                    onClick={() => setExpanded(expanded === b.uuid ? null : b.uuid)}
                     className="cursor-pointer transition-colors"
                     style={{
-                      background: expanded === b.id ? 'var(--zp-primary-soft)' : 'transparent',
+                      background: expanded === b.uuid ? 'var(--zp-primary-soft)' : 'transparent',
                       borderTop: '1px solid var(--zp-line)',
                     }}
-                    onMouseEnter={e => { if (expanded !== b.id) e.currentTarget.style.background = 'var(--zp-surface-2)' }}
-                    onMouseLeave={e => { if (expanded !== b.id) e.currentTarget.style.background = 'transparent' }}
+                    onMouseEnter={e => { if (expanded !== b.uuid) e.currentTarget.style.background = 'var(--zp-surface-2)' }}
+                    onMouseLeave={e => { if (expanded !== b.uuid) e.currentTarget.style.background = 'transparent' }}
                   >
                     <td className="px-5 py-3 font-mono text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>{b.id}</td>
-                    <td className="px-5 py-3 font-mono text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>{maskPhone(b.phone)}</td>
+                    <td className="px-5 py-3 text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>
+                      <div className="font-mono">{maskPhoneSafe(b.phone)}</div>
+                      {b.userName && <div className="text-[10px] mt-0.5" style={{ color: 'var(--zp-ink-3)' }}>{b.userName}</div>}
+                    </td>
                     <td className="px-5 py-3 text-[13px]">
                       <span className="font-mono font-semibold" style={{ color: 'var(--zp-ink)' }}>{b.spot}</span>
                       <span className="ml-2 text-[10px] font-mono" style={{ color: 'var(--zp-ink-3)' }}>Z-{b.zone}</span>
                     </td>
-                    <td className="px-5 py-3 text-[13px] font-mono" style={{ color: 'var(--zp-ink-2)' }}>{b.duration}</td>
+                    <td className="px-5 py-3 font-mono text-[12px]" style={{ color: 'var(--zp-ink-2)' }}>{b.plate || '—'}</td>
                     <td className="px-5 py-3 text-right font-mono text-[13px] font-semibold tabular-nums" style={{ color: 'var(--zp-ink)' }}>
                       {(b.amount || 0).toLocaleString()} <span className="text-[10px] font-normal" style={{ color: 'var(--zp-ink-3)' }}>RWF</span>
                     </td>
                     <td className="px-5 py-3">
-                      <Pill variant={b.status === 'paid' ? 'success' : b.status === 'used' ? 'info' : b.status === 'pending' ? 'warn' : b.status === 'expired' ? 'danger' : 'default'}>
-                        {b.status}
-                      </Pill>
+                      <Pill variant={statusVariant(b.status)}>{b.status.replace('_', ' ')}</Pill>
                     </td>
                     <td className="px-5 py-3 font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>{b.momoTx || '—'}</td>
                     <td className="px-5 py-3 text-right font-mono text-[11px]" style={{ color: 'var(--zp-ink-3)' }}>
-                      {b.createdAt ? `${Math.floor((Date.now() - new Date(b.createdAt).getTime()) / 3600000)}h ago` : '—'}
+                      {timeAgo(b.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-center" style={{ color: 'var(--zp-ink-3)' }}>
-                      {expanded === b.id ? '▴' : '▾'}
+                      {expanded === b.uuid ? '▴' : '▾'}
                     </td>
                   </tr>
-                  {expanded === b.id && (
+                  {expanded === b.uuid && (
                     <tr style={{ background: 'var(--zp-surface-2)', borderTop: '1px solid var(--zp-line)' }}>
                       <td colSpan={9} className="px-5 py-5">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                           <div>
-                            <Eyebrow>Timeline</Eyebrow>
-                            <div className="space-y-2 mt-3">
-                              {['Booked', 'Payment initiated', 'MoMo confirmed', 'QR generated', b.status === 'used' ? 'Gate scanned' : null].filter(Boolean).map((step, idx) => (
-                                <div key={idx} className="flex items-center gap-2.5 text-[12px]">
-                                  <span className="w-2 h-2 rounded-full" style={{ background: 'var(--zp-free)' }}></span>
-                                  <span style={{ color: 'var(--zp-ink)' }}>{step}</span>
-                                  <span className="font-mono text-[10px] ml-auto" style={{ color: 'var(--zp-ink-3)' }}>
-                                    {b.createdAt ? new Date(new Date(b.createdAt).getTime() + idx * 60000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                  </span>
-                                </div>
-                              ))}
+                            <Eyebrow>Booking</Eyebrow>
+                            <div className="space-y-1 mt-3">
+                              <DataRow label="Ref" value={b.id} mono />
+                              <DataRow label="UUID" value={b.uuid || '—'} mono small />
+                              <DataRow label="Event" value={b.eventTitle || '—'} small />
+                              <DataRow label="Created" value={b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'} mono small />
                             </div>
                           </div>
                           <div>
                             <Eyebrow>Customer</Eyebrow>
                             <div className="space-y-1 mt-3">
-                              <DataRow label="Phone (full)" value={b.phone || '—'} mono />
-                              <DataRow label="App version" value={b.appVersion || '—'} mono small />
-                              <DataRow label="Previous bookings" value={b.previousBookings ?? '—'} mono />
+                              <DataRow label="Name" value={b.userName || '—'} />
+                              <DataRow label="Phone" value={b.phone || '—'} mono />
+                              <DataRow label="Plate" value={b.plate || '—'} mono />
                             </div>
                           </div>
                           <div>
-                            <Eyebrow>Actions</Eyebrow>
-                            <div className="space-y-1.5 mt-3">
-                              <ActionBtn>View QR code →</ActionBtn>
-                              <ActionBtn>Refund booking →</ActionBtn>
-                              <ActionBtn>Contact via SMS →</ActionBtn>
+                            <Eyebrow>Payment</Eyebrow>
+                            <div className="space-y-1 mt-3">
+                              <DataRow label="Amount" value={`${(b.amount || 0).toLocaleString()} RWF`} mono />
+                              <DataRow label="MoMo Tx" value={b.momoTx || '—'} mono small />
+                              <DataRow label="Status" value={b.status} />
                             </div>
                           </div>
                         </div>
@@ -240,21 +290,29 @@ export default function BookingsView() {
   )
 }
 
-function ActionBtn({ children }) {
-  return (
-    <button
-      className="w-full text-left px-3 py-2 text-[12px] rounded-md transition-colors"
-      style={{ color: 'var(--zp-ink-2)' }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'var(--zp-primary-soft)'
-        e.currentTarget.style.color = 'var(--zp-primary)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'transparent'
-        e.currentTarget.style.color = 'var(--zp-ink-2)'
-      }}
-    >
-      {children}
-    </button>
-  )
+function statusVariant(s) {
+  return {
+    paid: 'success',
+    used: 'info',
+    active: 'success',
+    pending: 'warn',
+    cancelled: 'default',
+    refunded: 'default',
+    expired: 'danger',
+    no_show: 'danger',
+  }[s] || 'default'
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—'
+  try {
+    const diff = Date.now() - new Date(iso).getTime()
+    const h = Math.floor(diff / 3600000)
+    if (h < 1) {
+      const m = Math.floor(diff / 60000)
+      return `${m}m ago`
+    }
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+  } catch { return '—' }
 }
