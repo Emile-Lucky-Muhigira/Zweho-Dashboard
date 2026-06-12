@@ -5,7 +5,7 @@ import { Panel, MetricCard, Pill, DataRow, Eyebrow } from '../components/ui'
 import { useToast } from '../lib/toast'
 import { Icons } from '../components/Icons'
 
-// Mask phone "+250788..." → "+250 7XX XXX 193" — safe even if input is missing.
+// Mask phone "+250788..." → "+250 7XX XXX 193" — safe with missing input.
 function maskPhoneSafe(phone) {
   if (!phone || typeof phone !== 'string') return '—'
   const digits = phone.replace(/\D/g, '')
@@ -14,21 +14,19 @@ function maskPhoneSafe(phone) {
   return phone.slice(0, phone.length - 6).replace(/\d/g, 'X') + ' XXX ' + last3
 }
 
-// Map Bruno's uppercase enum → our lowercase shape.
+// Map Bruno's booking shape into ours.
 function normalizeBooking(b) {
   if (!b) return null
   const phone = b.user?.phone ?? b.phone ?? b.user_phone ?? ''
   const userName = b.user?.full_name ?? b.user?.name ?? ''
   const status = (b.status || 'pending').toString().toLowerCase()
   return {
-    id: b.ref || b.id,                                  // short ref for display
-    uuid: b.id,                                         // UUID for backend ops
+    id: b.ref || b.id,
+    uuid: b.id,
     phone,
     userName,
     spot: b.spot_label || b.slot?.label || b.slot_id || '—',
     zone: b.zone_id || b.slot?.zone_id || '—',
-    duration: b.duration || b.arrival_to && b.arrival_from
-      ? formatDuration(b.arrival_from, b.arrival_to) : '—',
     amount: b.amount_rwf ?? b.amount ?? 0,
     status,
     momoTx: b.payment?.momo_tx_id ?? b.momo_tx_id ?? null,
@@ -39,57 +37,60 @@ function normalizeBooking(b) {
   }
 }
 
-function formatDuration(from, to) {
-  try {
-    const minutes = Math.round((new Date(to) - new Date(from)) / 60000)
-    if (minutes < 60) return `${minutes}m`
-    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  } catch { return '—' }
-}
-
 export default function BookingsView() {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(null)
   const toast = useToast()
 
+  // Single fetch — all bookings. Filter/search happens client-side.
   const { data: rawBookings = [] } = useQuery({
-    queryKey: ['bookings', filter],
-    queryFn: () => getBookings({ status: filter === 'all' ? undefined : filter.toUpperCase() }),
-  })
-
-  // Normalise once; search is client-side (Bruno's API doesn't accept search yet).
-  const bookings = useMemo(() => {
-    const normalised = rawBookings.map(normalizeBooking).filter(Boolean)
-    if (!search) return normalised
-    const q = search.toLowerCase()
-    return normalised.filter(b =>
-      (b.id || '').toLowerCase().includes(q) ||
-      (b.phone || '').toLowerCase().includes(q) ||
-      (b.plate || '').toLowerCase().includes(q)
-    )
-  }, [rawBookings, search])
-
-  const { data: rawAll = [] } = useQuery({
-    queryKey: ['bookings-all'],
+    queryKey: ['bookings'],
     queryFn: () => getBookings(),
   })
-  const allBookings = useMemo(() => rawAll.map(normalizeBooking).filter(Boolean), [rawAll])
 
-  const offline = isOffline(rawAll)
+  const allBookings = useMemo(
+    () => rawBookings.map(normalizeBooking).filter(Boolean),
+    [rawBookings]
+  )
 
-  // ── KPIs computed from REAL data ──────────────────────────
+  // Client-side filter + search.
+  const visibleBookings = useMemo(() => {
+    let list = allBookings
+    if (filter !== 'all') {
+      list = list.filter(b => b.status === filter)
+    }
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(b =>
+        (b.id || '').toLowerCase().includes(q) ||
+        (b.phone || '').toLowerCase().includes(q) ||
+        (b.plate || '').toLowerCase().includes(q) ||
+        (b.userName || '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [allBookings, filter, search])
+
+  const offline = isOffline(rawBookings)
+
+  // Status counts for the filter chips.
+  const counts = useMemo(() => {
+    const c = { all: allBookings.length }
+    allBookings.forEach(b => { c[b.status] = (c[b.status] || 0) + 1 })
+    return c
+  }, [allBookings])
+
+  // KPIs.
   const kpis = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     const isToday = (b) => (b.createdAt || '').slice(0, 10) === today
-
     const todays = allBookings.filter(isToday)
     const pending = allBookings.filter(b => b.status === 'pending')
     const active = allBookings.filter(b => b.status === 'paid' || b.status === 'active')
     const todayRevenue = todays
       .filter(b => ['paid', 'used', 'active'].includes(b.status))
       .reduce((sum, b) => sum + (b.amount || 0), 0)
-
     return {
       today: todays.length,
       pending: pending.length,
@@ -100,12 +101,12 @@ export default function BookingsView() {
 
   const handleExport = async () => {
     try {
-      const url = await exportBookingsCSV({ status: filter === 'all' ? undefined : filter.toUpperCase() })
+      const url = await exportBookingsCSV()
       const a = document.createElement('a')
       a.href = url
       a.download = `zweho-bookings-${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
-      toast.success('Export complete', `${bookings.length} bookings downloaded`)
+      toast.success('Export complete', `${visibleBookings.length} bookings downloaded`)
     } catch (err) {
       toast.error('Export failed', err.message || 'Try again')
     }
@@ -113,7 +114,6 @@ export default function BookingsView() {
 
   return (
     <div className="space-y-5 fade-in">
-      {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <MetricCard label="Today's Bookings" value={kpis.today} tone="info" />
         <MetricCard label="Pending Payment" value={kpis.pending} unit="awaiting MoMo" tone={kpis.pending > 0 ? 'busy' : 'free'} />
@@ -135,7 +135,7 @@ export default function BookingsView() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search ref, phone, plate…"
+                placeholder="Search ref, phone, plate, name…"
                 className="bg-transparent text-[13px] font-mono w-48 outline-none"
                 style={{ color: 'var(--zp-ink)' }}
               />
@@ -150,7 +150,7 @@ export default function BookingsView() {
           </div>
         }
       >
-        {/* Filter chips — Bruno's enums: PENDING, PAID, ACTIVE, USED, CANCELLED, REFUNDED, NO_SHOW */}
+        {/* Filter chips — counts always visible */}
         <div
           className="flex items-center gap-1 px-5 py-3 flex-wrap"
           style={{ borderBottom: '1px solid var(--zp-line)', background: 'var(--zp-surface-2)' }}
@@ -166,21 +166,16 @@ export default function BookingsView() {
               }}
             >
               {f.replace('_', ' ')}
-              {filter === f && (
-                <span className="ml-1.5 font-normal" style={{ color: 'var(--zp-primary)', opacity: 0.6 }}>
-                  {bookings.length}
-                </span>
-              )}
+              <span className="ml-1.5 font-normal" style={{ opacity: 0.6 }}>
+                {counts[f] || 0}
+              </span>
             </button>
           ))}
           <div className="ml-auto flex items-center gap-3 text-[11px] font-mono uppercase tracking-[0.14em]" style={{ color: 'var(--zp-ink-3)' }}>
-            <span>Sorted: <span style={{ color: 'var(--zp-ink-2)' }}>newest</span></span>
-            <span>·</span>
-            <span>Showing <span style={{ color: 'var(--zp-ink-2)' }}>{bookings.length}</span></span>
+            <span>Showing <span style={{ color: 'var(--zp-ink-2)' }}>{visibleBookings.length}</span></span>
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-auto max-h-[640px]">
           <table className="w-full">
             <thead className="sticky top-0 z-10" style={{ background: 'var(--zp-surface)' }}>
@@ -197,7 +192,7 @@ export default function BookingsView() {
               </tr>
             </thead>
             <tbody>
-              {bookings.length === 0 && (
+              {visibleBookings.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-5 py-12 text-center">
                     <div className="text-[13px] font-semibold" style={{ color: 'var(--zp-ink)' }}>
@@ -205,13 +200,13 @@ export default function BookingsView() {
                     </div>
                     <p className="text-[12px] mt-1 max-w-md mx-auto" style={{ color: 'var(--zp-ink-2)' }}>
                       {offline
-                        ? 'Backend unreachable. Bookings made by visitors will appear here in real time once the backend is connected.'
+                        ? 'Backend unreachable. Bookings made by visitors will appear here once the backend is connected.'
                         : 'Try a different filter or clear your search.'}
                     </p>
                   </td>
                 </tr>
               )}
-              {bookings.map(b => (
+              {visibleBookings.map(b => (
                 <React.Fragment key={b.uuid || b.id}>
                   <tr
                     onClick={() => setExpanded(expanded === b.uuid ? null : b.uuid)}
