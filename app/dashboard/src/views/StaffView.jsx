@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import {
-  useStaff, ROLES, ROLE_ACCESS, initialsOf,
+  useStaff, ROLES, ROLES_AVAILABLE, ROLE_ACCESS, initialsOf,
 } from '../lib/staffStore'
 import { useAuth } from '../lib/auth'
 import { Panel, MetricCard, Pill, Eyebrow } from '../components/ui'
@@ -31,7 +31,6 @@ export default function StaffView() {
   const counts = {
     admin: staff.filter(m => m.role === 'admin').length,
     staff: staff.filter(m => m.role === 'staff').length,
-    'stadium-rep': staff.filter(m => m.role === 'stadium-rep').length,
     invited: staff.filter(m => m.status === 'invited').length,
   }
 
@@ -82,7 +81,6 @@ export default function StaffView() {
             { id: 'all', label: 'All', n: staff.length },
             { id: 'admin', label: 'Admins', n: counts.admin },
             { id: 'staff', label: 'Gate Operators', n: counts.staff },
-            { id: 'stadium-rep', label: 'Stadium Reps', n: counts['stadium-rep'] },
           ].map(f => (
             <button
               key={f.id}
@@ -105,7 +103,6 @@ export default function StaffView() {
             onSave={(data) => {
               const m = inviteMember(data)
               setShowInvite(false)
-              // Show the credential to share
               if (m.inviteMethod === 'password') {
                 setCredModal({ member: m, type: 'password', value: m.tempPassword })
               } else {
@@ -244,7 +241,6 @@ function MemberRow({ member, isAdmin, isSelf, topBorder, onEdit, onChangeRole, o
             {expanded ? 'Less' : 'Details'}
           </button>
 
-          {/* Self-service password reset — every user, their own account */}
           {isSelf && m.canResetPassword && (
             <button
               onClick={onResetPassword}
@@ -313,8 +309,8 @@ function MemberRow({ member, isAdmin, isSelf, topBorder, onEdit, onChangeRole, o
                         className="w-full mt-1 px-2 py-1.5 text-[12px] rounded-md outline-none"
                         style={{ background: 'var(--zp-surface)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
                       >
-                        {Object.entries(ROLES).map(([k, v]) => (
-                          <option key={k} value={k}>{v.label}</option>
+                        {ROLES_AVAILABLE.map(k => (
+                          <option key={k} value={k}>{ROLES[k].label}</option>
                         ))}
                       </select>
                     </div>
@@ -427,8 +423,8 @@ function MemberForm({ mode, initial, onSave, onCancel }) {
           <label className={labelCls} style={{ color: 'var(--zp-ink-3)' }}>Role · access level</label>
           <select value={f.role} onChange={e => set('role', e.target.value)}
             className="w-full mt-1 px-3 py-2 text-[13px] rounded-md outline-none" style={inputStyle}>
-            {Object.entries(ROLES).map(([k, v]) => (
-              <option key={k} value={k}>{v.label} — {v.desc}</option>
+            {ROLES_AVAILABLE.map(k => (
+              <option key={k} value={k}>{ROLES[k].label} — {ROLES[k].desc}</option>
             ))}
           </select>
         </div>

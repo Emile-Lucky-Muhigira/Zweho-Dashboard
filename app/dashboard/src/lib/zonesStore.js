@@ -1,135 +1,182 @@
 // ============================================================
 // Zones store — admin-managed parking zones.
 //
-// Zones are configuration (not live sensor data), so they live
-// in localStorage and work fully offline. When Bruno's backend
-// is ready, these functions get an API call added alongside the
-// localStorage write — the rest of the app won't change.
+// Source of truth is Bruno's backend (/admin/lots/<id>/zones/).
+// We mirror the latest response into localStorage so the UI has
+// something to show instantly on load — then refresh from the API
+// in the background. All CRUD goes through the API; on success,
+// we re-fetch so every consumer is in sync.
 //
-// A zone:
-//   { id, name, capacity, color, status }
-//   status: 'active'  → in use, shows on all pages
-//           'inactive'→ marked unavailable, hidden from operations
+// Zone shape (normalised to what existing views expect):
+//   { id, name, capacity, color, status, backendId, raw }
+//     id        — short label, e.g. "A"
+//     backendId — UUID Bruno's API uses to address this row
+//     status    — 'active' | 'inactive'
 // ============================================================
 import { useState, useEffect, useCallback } from 'react'
 import { DEFAULT_ZONES, STORAGE_KEYS } from './constants'
+import * as apiZones from './api'
 
 const KEY = STORAGE_KEYS.zones
 
-// Read all zones from storage. First run seeds with DEFAULT_ZONES.
-export function getZones() {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) {
-      // First run — seed with defaults so the app isn't empty.
-      localStorage.setItem(KEY, JSON.stringify(DEFAULT_ZONES))
-      return [...DEFAULT_ZONES]
-    }
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : [...DEFAULT_ZONES]
-  } catch {
-    return [...DEFAULT_ZONES]
+const ZONE_PALETTE = ['#163A6E', '#E4B228', '#2563A8', '#1F8A5B', '#7A5CC4', '#C44A3E', '#E8941A']
+
+// Map Bruno's zone payload into our shape.
+function normalizeZone(raw, index = 0) {
+  return {
+    id: raw.zone_id || raw.id || `Z${index + 1}`,
+    backendId: raw.id,
+    name: raw.name || raw.full_name || `Zone ${raw.zone_id}`,
+    capacity: raw.total_spaces ?? raw.capacity ?? 0,
+    color: raw.color || ZONE_PALETTE[index % ZONE_PALETTE.length],
+    status: raw.is_active === false ? 'inactive' : 'active',
+    price_rwf: raw.price_rwf ?? 0,
+    walk_minutes: raw.walk_minutes ?? 0,
+    raw,
   }
 }
 
-// Save the full zones array and notify listeners.
-function saveZones(zones) {
+// ── Cache helpers ───────────────────────────────────────────
+function readCache() {
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function writeCache(zones) {
   try {
     localStorage.setItem(KEY, JSON.stringify(zones))
     window.dispatchEvent(new CustomEvent('zweho-zones-changed'))
-  } catch {
-    /* ignore storage errors */
-  }
+  } catch { /* ignore */ }
 }
 
-// Generate the next free zone id (A, B, C ... Z, then Z1, Z2...).
-function nextZoneId(zones) {
-  const used = new Set(zones.map(z => z.id))
+// Synchronous reader used by the React hook on first render.
+// Returns the cached list if any; otherwise the seed defaults
+// so the UI is not blank while the first fetch is in flight.
+export function getZones() {
+  const cached = readCache()
+  if (cached) return cached
+  return [...DEFAULT_ZONES]
+}
+
+// Fetch from backend → normalise → cache → return.
+export async function refreshZones() {
+  const list = await apiZones.listZones()
+  if (list && Array.isArray(list) && !list._offline) {
+    const normalised = list.map((z, i) => normalizeZone(z, i))
+    writeCache(normalised)
+    return normalised
+  }
+  // Offline — keep whatever cache we had.
+  return readCache() || [...DEFAULT_ZONES]
+}
+
+// ── CRUD — every write goes through the backend ────────────
+export async function addZone({ name, capacity, color, price_rwf = 0, walk_minutes = 5 }) {
+  const current = getZones()
+  // Pick the next free single-letter id.
+  const used = new Set(current.map(z => z.id))
+  let zoneId = ''
   for (let i = 0; i < 26; i++) {
     const letter = String.fromCharCode(65 + i)
-    if (!used.has(letter)) return letter
+    if (!used.has(letter)) { zoneId = letter; break }
   }
-  let n = 1
-  while (used.has('Z' + n)) n++
-  return 'Z' + n
-}
-
-// A palette to cycle through for new zones.
-const ZONE_PALETTE = ['#163A6E', '#E4B228', '#2563A8', '#1F8A5B', '#7A5CC4', '#C44A3E', '#E8941A']
-
-export function addZone({ name, capacity, color }) {
-  const zones = getZones()
-  const id = nextZoneId(zones)
-  const zone = {
-    id,
-    name: name?.trim() || `Zone ${id}`,
-    capacity: Math.max(1, parseInt(capacity, 10) || 1),
-    color: color || ZONE_PALETTE[zones.length % ZONE_PALETTE.length],
-    status: 'active',
+  if (!zoneId) {
+    let n = 1
+    while (used.has('Z' + n)) n++
+    zoneId = 'Z' + n
   }
-  saveZones([...zones, zone])
-  return zone
+
+  await apiZones.createZone({
+    zone_id: zoneId,
+    name: name?.trim() || `Zone ${zoneId}`,
+    price_rwf: parseInt(price_rwf, 10) || 0,
+    walk_minutes: parseInt(walk_minutes, 10) || 5,
+  })
+
+  const refreshed = await refreshZones()
+  return refreshed.find(z => z.id === zoneId)
 }
 
-export function updateZone(id, changes) {
-  const zones = getZones().map(z =>
-    z.id === id
-      ? {
-          ...z,
-          ...changes,
-          capacity: changes.capacity != null
-            ? Math.max(1, parseInt(changes.capacity, 10) || z.capacity)
-            : z.capacity,
-        }
-      : z
-  )
-  saveZones(zones)
+export async function updateZone(localId, changes) {
+  const zone = getZones().find(z => z.id === localId)
+  if (!zone || !zone.backendId) throw new Error('Zone not found')
+
+  const payload = {}
+  if (changes.name != null) payload.name = changes.name
+  if (changes.price_rwf != null) payload.price_rwf = parseInt(changes.price_rwf, 10)
+  if (changes.walk_minutes != null) payload.walk_minutes = parseInt(changes.walk_minutes, 10)
+  if (changes.status != null) payload.is_active = changes.status === 'active'
+
+  await apiZones.updateZone(zone.backendId, payload)
+  await refreshZones()
 }
 
-// "Remove" = mark inactive (your team's requirement: a zone not in
-// use should be marked not-available, not hard-deleted).
-export function deactivateZone(id) {
-  updateZone(id, { status: 'inactive' })
+export async function deactivateZone(localId) {
+  const zone = getZones().find(z => z.id === localId)
+  if (!zone || !zone.backendId) return
+  await apiZones.deactivateZone(zone.backendId)
+  await refreshZones()
 }
 
-export function reactivateZone(id) {
-  updateZone(id, { status: 'active' })
+export async function reactivateZone(localId) {
+  // Backend uses PATCH with is_active=true to re-enable.
+  return updateZone(localId, { status: 'active' })
 }
 
-// Hard delete — only for zones added by mistake.
-export function deleteZone(id) {
-  saveZones(getZones().filter(z => z.id !== id))
+// Hard delete maps to deactivate — backend uses soft-delete.
+export async function deleteZone(localId) {
+  return deactivateZone(localId)
 }
 
-// Reset everything back to the seed defaults.
-export function resetZones() {
-  saveZones([...DEFAULT_ZONES])
+export async function resetZones() {
+  // No-op against the backend — admins should add zones explicitly.
+  return refreshZones()
 }
 
-// React hook — components use this to read zones and stay in sync.
+// ── React hook ──────────────────────────────────────────────
 export function useZones() {
   const [zones, setZones] = useState(getZones())
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+    const sync = async () => {
+      setLoading(true)
+      try {
+        const fresh = await refreshZones()
+        if (!cancelled) setZones(fresh)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    sync()
+
     const refresh = () => setZones(getZones())
     window.addEventListener('zweho-zones-changed', refresh)
-    window.addEventListener('storage', refresh)
     return () => {
+      cancelled = true
       window.removeEventListener('zweho-zones-changed', refresh)
-      window.removeEventListener('storage', refresh)
     }
   }, [])
 
   const activeZones = zones.filter(z => z.status === 'active')
 
   return {
-    zones,            // all zones, including inactive
-    activeZones,      // only active — use this for operations views
+    zones,
+    activeZones,
+    loading,
     addZone:        useCallback((data) => addZone(data), []),
     updateZone:     useCallback((id, c) => updateZone(id, c), []),
     deactivateZone: useCallback((id) => deactivateZone(id), []),
     reactivateZone: useCallback((id) => reactivateZone(id), []),
     deleteZone:     useCallback((id) => deleteZone(id), []),
     resetZones:     useCallback(() => resetZones(), []),
+    refresh:        useCallback(() => refreshZones().then(setZones), []),
   }
 }

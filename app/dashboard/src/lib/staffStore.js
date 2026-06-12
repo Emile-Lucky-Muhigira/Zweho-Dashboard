@@ -22,12 +22,23 @@ import { STORAGE_KEYS } from './constants'
 
 const KEY = STORAGE_KEYS.staff
 
-// Roles and the access each grants. Mirrors lib/auth.jsx permissions.
+// ── ROLES ───────────────────────────────────────────────────
+// All defined roles — kept here so existing code that reads
+// ROLES[member.role] keeps working for legacy data.
+//
+// ROLES_AVAILABLE controls what shows in invite/edit dropdowns.
+// "Stadium Rep" exists in our spec but Bruno's backend doesn't
+// support it yet (only USER, ADMIN, GATE_STAFF). When he adds
+// it server-side, add 'stadium-rep' back into ROLES_AVAILABLE.
+// TODO: restore Stadium Rep once Bruno's backend supports it.
 export const ROLES = {
   admin:          { label: 'Admin',         desc: 'Full access to every page and action' },
   staff:          { label: 'Gate Operator', desc: 'Gate Scan and Scan History only' },
   'stadium-rep':  { label: 'Stadium Rep',   desc: 'Revenue, Analytics and Events only' },
 }
+
+// Only these roles appear in the UI for selecting / inviting.
+export const ROLES_AVAILABLE = ['admin', 'staff']
 
 export const ROLE_ACCESS = {
   admin:         ['Overview', 'Zones', 'Bookings', 'Revenue', 'Analytics', 'Events', 'Cameras', 'Staff', 'Gate Scan', 'Scan History', 'Annotate', 'Edge Devices', 'API Docs', 'Settings'],
@@ -76,13 +87,11 @@ function genId() {
   return 'usr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
 }
 
-// Short human-shareable code, e.g. "ZWEHO-7F3K9"
 function genInviteCode() {
   const s = Math.random().toString(36).toUpperCase().slice(2, 7)
   return 'ZWEHO-' + s
 }
 
-// Temp password, e.g. "Zw-4821-kp"
 function genTempPassword() {
   const n = Math.floor(1000 + Math.random() * 9000)
   const s = Math.random().toString(36).slice(2, 4)
@@ -94,23 +103,23 @@ function initialsOf(name) {
 }
 
 // ── Invite / add a member ───────────────────────────────────
-// method: 'link'  → returns an invite code to share
-//         'password' → returns a temp password to share
 export function inviteMember({ name, email, phone, role, title, team, method }) {
   const staff = getStaff()
+  // Guard: only allow roles that are currently available in the UI.
+  const safeRole = ROLES_AVAILABLE.includes(role) ? role : 'staff'
   const member = {
     id: genId(),
     name: name?.trim() || 'New member',
     email: email?.trim() || '',
     phone: phone?.trim() || '',
-    role: ROLES[role] ? role : 'staff',
+    role: safeRole,
     title: title?.trim() || '',
     team: team?.trim() || 'Operations',
     status: 'invited',
     inviteMethod: method === 'password' ? 'password' : 'link',
     inviteCode: method === 'password' ? null : genInviteCode(),
     tempPassword: method === 'password' ? genTempPassword() : null,
-    canResetPassword: true,            // team requirement: granted on add
+    canResetPassword: true,
     joined: new Date().toISOString().slice(0, 10),
   }
   saveStaff([...staff, member])
@@ -122,7 +131,8 @@ export function updateMember(id, changes) {
 }
 
 export function changeRole(id, role) {
-  if (!ROLES[role]) return
+  // Guard: only allow available roles.
+  if (!ROLES_AVAILABLE.includes(role)) return
   updateMember(id, { role })
 }
 
@@ -133,15 +143,11 @@ export function removeMember(id) {
   saveStaff(getStaff().filter(m => m.id !== id))
 }
 
-// Mark an invited member as having completed setup.
 export function activateInvite(id) {
   updateMember(id, { status: 'active', inviteCode: null, tempPassword: null })
 }
 
 // ── Password reset ──────────────────────────────────────────
-// Generates a new temp password. In production this also calls
-// Bruno's /auth reset endpoint; here it returns the temp value
-// so the admin (or user) can see/share it.
 export function resetPassword(id) {
   const member = getStaff().find(m => m.id === id)
   if (!member || !member.canResetPassword) return null

@@ -16,6 +16,7 @@ export default function LoginView() {
   // OTP state
   const [otpLength, setOtpLength] = useState(6)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  const [devOtp, setDevOtp] = useState(null) // backend returns this while SMS isn't wired
 
   const handleCredentials = async (e) => {
     e?.preventDefault()
@@ -28,7 +29,8 @@ export default function LoginView() {
     try {
       const res = await loginStep1({ email: email.trim(), password })
       setOtpLength(res.otpLength || 6)
-      setSecondsLeft(res.expiresIn || 300)
+      setSecondsLeft(res.expiresIn || 600)
+      setDevOtp(res.devOtp || null)
       setStep('otp')
     } catch (err) {
       setError(err.message)
@@ -43,8 +45,6 @@ export default function LoginView() {
     try {
       const result = await verifyOtp({ email: email.trim(), code })
       if (result.mustChangePassword) {
-        // Freshly invited staff using their default password —
-        // send them to create a new one before entering the app.
         navigate('/create-password')
       } else {
         navigate('/')
@@ -59,8 +59,9 @@ export default function LoginView() {
   const handleResend = async () => {
     setError('')
     try {
-      await resendOtp({ email: email.trim() })
-      setSecondsLeft(300)
+      const res = await resendOtp({ email: email.trim() })
+      setSecondsLeft(600)
+      setDevOtp(res?.devOtp || null)
     } catch (err) {
       setError(err.message)
     }
@@ -152,9 +153,10 @@ export default function LoginView() {
               setSecondsLeft={setSecondsLeft}
               busy={busy}
               error={error}
+              devOtp={devOtp}
               onVerify={handleVerify}
               onResend={handleResend}
-              onBack={() => { setStep('credentials'); setError('') }}
+              onBack={() => { setStep('credentials'); setError(''); setDevOtp(null) }}
             />
           )}
         </div>
@@ -173,7 +175,7 @@ export default function LoginView() {
             <div className="zp-card p-4 mt-1">
               <div className="zp-eyebrow">Developer access · temporary</div>
               <p className="text-[11px] mt-1.5 mb-3" style={{ color: 'var(--zp-ink-2)' }}>
-                For team review before the authentication backend is live. Bypasses OTP. To be removed before launch.
+                For team review without going through OTP. To be removed before launch.
               </p>
               <div className="space-y-1.5">
                 {DEV_HINTS.map(h => (
@@ -207,7 +209,7 @@ export default function LoginView() {
 }
 
 /* ── OTP step ──────────────────────────────────────────────── */
-function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, onVerify, onResend, onBack }) {
+function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, devOtp, onVerify, onResend, onBack }) {
   const [digits, setDigits] = useState(Array(length).fill(''))
   const inputs = useRef([])
 
@@ -220,13 +222,23 @@ function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, onVe
 
   useEffect(() => { inputs.current[0]?.focus() }, [])
 
+  // Dev convenience: when backend returns dev_otp (SMS not wired yet),
+  // autofill the code so testing doesn't need a real phone.
+  useEffect(() => {
+    if (!devOtp) return
+    const code = String(devOtp).replace(/\D/g, '').slice(0, length)
+    if (code.length !== length) return
+    const next = Array(length).fill('')
+    code.split('').forEach((d, i) => { next[i] = d })
+    setDigits(next)
+  }, [devOtp, length])
+
   const setDigit = (i, val) => {
     const clean = val.replace(/\D/g, '').slice(-1)
     const next = [...digits]
     next[i] = clean
     setDigits(next)
     if (clean && i < length - 1) inputs.current[i + 1]?.focus()
-    // Auto-submit when all filled
     if (next.every(d => d !== '')) onVerify(next.join(''))
   }
 
@@ -255,6 +267,13 @@ function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, onVe
         We sent a {length}-digit code by SMS to the phone registered to <strong style={{ color: 'var(--zp-ink)' }}>{email}</strong>.
       </p>
 
+      {devOtp && (
+        <div className="mt-3 px-3 py-2 rounded-md font-mono text-[11px]"
+          style={{ background: 'var(--zp-busy-soft)', color: 'var(--zp-busy)' }}>
+          Dev mode · code autofilled from backend: <strong>{devOtp}</strong>
+        </div>
+      )}
+
       {/* OTP boxes */}
       <div className="flex gap-2 mt-5" onPaste={onPaste}>
         {digits.map((d, i) => (
@@ -266,7 +285,7 @@ function OtpStep({ email, length, secondsLeft, setSecondsLeft, busy, error, onVe
             onKeyDown={e => onKeyDown(i, e)}
             inputMode="numeric"
             maxLength={1}
-            className="flex-1 aspect-square text-center font-mono text-xl font-bold rounded-md outline-none"
+            className="w-10 h-12 text-center font-mono text-xl font-bold rounded-md outline-none"
             style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
           />
         ))}

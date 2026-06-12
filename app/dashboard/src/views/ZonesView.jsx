@@ -7,7 +7,7 @@ import { Icons } from '../components/Icons'
 import { useToast } from '../lib/toast'
 
 export default function ZonesView() {
-  const { zones, activeZones, addZone, updateZone, deactivateZone, reactivateZone, deleteZone, resetZones } = useZones()
+  const { zones, activeZones, addZone, updateZone, deactivateZone, reactivateZone, deleteZone, resetZones, loading, refresh } = useZones()
   const toast = useToast()
 
   const [showAddForm, setShowAddForm] = useState(false)
@@ -43,21 +43,19 @@ export default function ZonesView() {
 
       <Panel
         title="Parking Zones"
-        subtitle="Admin-managed · Configure venue layout"
+        subtitle={loading ? 'Loading from backend…' : 'Admin-managed · Configure venue layout'}
         noPadding
         action={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                if (confirm('Reset all zones back to the default 5? This removes any custom zones.')) {
-                  resetZones()
-                  toast.info('Zones reset', 'Restored to default layout')
-                }
+              onClick={async () => {
+                try { await refresh(); toast.info('Refreshed', 'Zones synced from server') }
+                catch (err) { toast.error('Could not refresh', err.message) }
               }}
               className="px-3 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] rounded-md font-semibold"
               style={{ background: 'var(--zp-surface-2)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
             >
-              Reset
+              Refresh
             </button>
             <button
               onClick={() => { setShowAddForm(true); setEditingId(null) }}
@@ -72,10 +70,14 @@ export default function ZonesView() {
         {/* Add zone form */}
         {showAddForm && (
           <ZoneForm
-            onSave={(data) => {
-              const z = addZone(data)
-              toast.success('Zone added', `${z.name} · ${z.capacity} slots`)
-              setShowAddForm(false)
+            onSave={async (data) => {
+              try {
+                const z = await addZone(data)
+                toast.success('Zone added', z ? `${z.name} · ${z.capacity} slots` : 'Saved')
+                setShowAddForm(false)
+              } catch (err) {
+                toast.error('Could not add zone', err.response?.data?.message || err.message)
+              }
             }}
             onCancel={() => setShowAddForm(false)}
           />
@@ -85,7 +87,7 @@ export default function ZonesView() {
         <div>
           {zones.length === 0 && (
             <div className="px-5 py-10 text-center text-[13px]" style={{ color: 'var(--zp-ink-3)' }}>
-              No zones configured. Click "Add zone" to begin.
+              {loading ? 'Loading zones from server…' : 'No zones configured. Click "Add zone" to begin.'}
             </div>
           )}
 
@@ -99,10 +101,14 @@ export default function ZonesView() {
                 <ZoneForm
                   key={z.id}
                   initial={z}
-                  onSave={(data) => {
-                    updateZone(z.id, data)
-                    toast.success('Zone updated', data.name)
-                    setEditingId(null)
+                  onSave={async (data) => {
+                    try {
+                      await updateZone(z.id, data)
+                      toast.success('Zone updated', data.name)
+                      setEditingId(null)
+                    } catch (err) {
+                      toast.error('Could not update zone', err.response?.data?.message || err.message)
+                    }
                   }}
                   onCancel={() => setEditingId(null)}
                 />
@@ -165,7 +171,10 @@ export default function ZonesView() {
                   </button>
                   {isInactive ? (
                     <button
-                      onClick={() => { reactivateZone(z.id); toast.success('Zone restored', z.name) }}
+                      onClick={async () => {
+                        try { await reactivateZone(z.id); toast.success('Zone restored', z.name) }
+                        catch (err) { toast.error('Could not restore zone', err.message) }
+                      }}
                       className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
                       style={{ background: 'var(--zp-free-soft)', color: 'var(--zp-free)', border: '1px solid color-mix(in srgb, var(--zp-free) 30%, transparent)' }}
                     >
@@ -173,7 +182,10 @@ export default function ZonesView() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => { deactivateZone(z.id); toast.warn('Zone marked unavailable', z.name) }}
+                      onClick={async () => {
+                        try { await deactivateZone(z.id); toast.warn('Zone marked unavailable', z.name) }
+                        catch (err) { toast.error('Could not update zone', err.message) }
+                      }}
                       className="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
                       style={{ background: 'var(--zp-busy-soft)', color: 'var(--zp-busy)', border: '1px solid color-mix(in srgb, var(--zp-busy) 30%, transparent)' }}
                     >
@@ -181,11 +193,14 @@ export default function ZonesView() {
                     </button>
                   )}
                   <button
-                    onClick={() => {
-                      if (confirm(`Permanently delete ${z.name}? Use "Mark unavailable" instead if it might return.`)) {
-                        deleteZone(z.id)
+                    onClick={async () => {
+                      if (!confirm(`Permanently delete ${z.name}? Use "Mark unavailable" instead if it might return.`)) return
+                      try {
+                        await deleteZone(z.id)
                         toast.error('Zone deleted', z.name)
                         if (selectedZone === z.id) setSelectedZone(null)
+                      } catch (err) {
+                        toast.error('Could not delete zone', err.message)
                       }
                     }}
                     className="w-8 h-8 flex items-center justify-center rounded-md"
@@ -225,8 +240,15 @@ function ZoneForm({ initial, onSave, onCancel }) {
   const [name, setName] = useState(initial?.name || '')
   const [capacity, setCapacity] = useState(initial?.capacity || 20)
   const [color, setColor] = useState(initial?.color || '#163A6E')
+  const [saving, setSaving] = useState(false)
 
   const COLORS = ['#163A6E', '#E4B228', '#2563A8', '#1F8A5B', '#7A5CC4', '#C44A3E', '#E8941A']
+
+  const handleSave = async () => {
+    setSaving(true)
+    try { await onSave({ name, capacity, color }) }
+    finally { setSaving(false) }
+  }
 
   return (
     <div className="px-5 py-4" style={{ background: 'var(--zp-primary-soft)', borderBottom: '1px solid var(--zp-line)' }}>
@@ -273,17 +295,19 @@ function ZoneForm({ initial, onSave, onCancel }) {
         <div className="md:col-span-2 flex gap-2">
           <button
             onClick={onCancel}
+            disabled={saving}
             className="flex-1 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
             style={{ background: 'var(--zp-surface)', color: 'var(--zp-ink-2)', border: '1px solid var(--zp-line)' }}
           >
             Cancel
           </button>
           <button
-            onClick={() => onSave({ name, capacity, color })}
+            onClick={handleSave}
+            disabled={saving}
             className="flex-1 py-2 text-[11px] font-mono uppercase tracking-[0.12em] rounded-md font-semibold"
-            style={{ background: 'var(--zp-primary)', color: '#fff' }}
+            style={{ background: 'var(--zp-primary)', color: '#fff', opacity: saving ? 0.6 : 1 }}
           >
-            Save
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -293,12 +317,10 @@ function ZoneForm({ initial, onSave, onCancel }) {
 
 /* ── Slot grid ─────────────────────────────────────────────── */
 function SlotGrid({ zone, spots }) {
-  // Build slot tiles: use live spots if available, else empty placeholders
   const slots = useMemo(() => {
     if (spots.length > 0) {
       return spots.map(s => ({ id: s.id, status: s.status }))
     }
-    // No live data — show empty placeholder slots up to capacity
     return Array.from({ length: zone.capacity }, (_, i) => ({
       id: `${zone.id}-${String(i + 1).padStart(2, '0')}`,
       status: 'empty',

@@ -20,6 +20,7 @@ export default function CreatePasswordView() {
   const [busy, setBusy] = useState(false)
   const [otpLength, setOtpLength] = useState(6)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  const [devOtp, setDevOtp] = useState(null) // dev-mode autofill, removed once SMS is live
 
   // Password rules
   const rules = [
@@ -40,7 +41,8 @@ export default function CreatePasswordView() {
     try {
       const res = await setNewPassword({ email, newPassword: pw })
       setOtpLength(res.otpLength || 6)
-      setSecondsLeft(res.expiresIn || 300)
+      setSecondsLeft(res.expiresIn || 600)
+      setDevOtp(res.devOtp || null)
       setStep('otp')
     } catch (err) {
       setError(err.message)
@@ -174,6 +176,7 @@ export default function CreatePasswordView() {
               setSecondsLeft={setSecondsLeft}
               busy={busy}
               error={error}
+              devOtp={devOtp}
               onConfirm={handleConfirm}
             />
           )}
@@ -188,7 +191,7 @@ export default function CreatePasswordView() {
 }
 
 /* ── OTP confirmation ──────────────────────────────────────── */
-function OtpConfirm({ email, length, secondsLeft, setSecondsLeft, busy, error, onConfirm }) {
+function OtpConfirm({ email, length, secondsLeft, setSecondsLeft, busy, error, devOtp, onConfirm }) {
   const [digits, setDigits] = useState(Array(length).fill(''))
   const inputs = useRef([])
 
@@ -199,6 +202,18 @@ function OtpConfirm({ email, length, secondsLeft, setSecondsLeft, busy, error, o
   }, [secondsLeft, setSecondsLeft])
 
   useEffect(() => { inputs.current[0]?.focus() }, [])
+
+  // Dev convenience: autofill and auto-submit when backend returns dev_otp.
+  useEffect(() => {
+    if (!devOtp) return
+    const code = String(devOtp).replace(/\D/g, '').slice(0, length)
+    if (code.length !== length) return
+    const next = Array(length).fill('')
+    code.split('').forEach((d, i) => { next[i] = d })
+    setDigits(next)
+    const t = setTimeout(() => onConfirm(code), 50)
+    return () => clearTimeout(t)
+  }, [devOtp, length, onConfirm])
 
   const setDigit = (i, val) => {
     const clean = val.replace(/\D/g, '').slice(-1)
@@ -234,6 +249,13 @@ function OtpConfirm({ email, length, secondsLeft, setSecondsLeft, busy, error, o
         We sent a {length}-digit code by SMS to the phone registered to <strong style={{ color: 'var(--zp-ink)' }}>{email}</strong>. Enter it to finish setting your new password.
       </p>
 
+      {devOtp && (
+        <div className="mt-3 px-3 py-2 rounded-md font-mono text-[11px]"
+          style={{ background: 'var(--zp-busy-soft)', color: 'var(--zp-busy)' }}>
+          Dev mode · code autofilled from backend: <strong>{devOtp}</strong>
+        </div>
+      )}
+
       <div className="flex gap-2 mt-5" onPaste={onPaste}>
         {digits.map((d, i) => (
           <input
@@ -244,7 +266,7 @@ function OtpConfirm({ email, length, secondsLeft, setSecondsLeft, busy, error, o
             onKeyDown={e => onKeyDown(i, e)}
             inputMode="numeric"
             maxLength={1}
-            className="flex-1 aspect-square text-center font-mono text-xl font-bold rounded-md outline-none"
+            className="w-10 h-12 text-center font-mono text-xl font-bold rounded-md outline-none"
             style={{ background: 'var(--zp-surface-2)', border: '1px solid var(--zp-line)', color: 'var(--zp-ink)' }}
           />
         ))}
